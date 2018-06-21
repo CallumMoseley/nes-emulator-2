@@ -1,0 +1,10 @@
+Branch instructions:
+Bitmask out important bit(??), invert or don't, read 1 byte, jump
+BCC
+BCS
+BEQ
+BMI
+BNE
+BPL
+BVC
+BVS
