@@ -1,11 +1,10 @@
-#include "cpu.h"
+#include <cstdio>
+#include <unistd.h>
+#include "CPU.h"
 
-public cpu::cpu() {
-    ram = new char[0x200];
-}
-
-public cpu::~cpu() {
-    delete[] ram;
+CPU::CPU() {
+    ram = new u8[0x800];
+    gameCart = new allsuite_cart();
 
     nmiLow = false;
     lastNmiLow = false;
@@ -17,8 +16,12 @@ public cpu::~cpu() {
     irqActive = false;
 }
 
-public void cpu::powerOn() {
-    *((char*) &p) = 0x34;
+CPU::~CPU() {
+    delete[] ram;
+}
+
+void CPU::powerOn() {
+    *((u8*) &p) = 0x34;
 
     a = 0x00;
     x = 0x00;
@@ -29,32 +32,51 @@ public void cpu::powerOn() {
     nmiLow = false;
     lastNmiLow = false;
 
-    for (int i = 0; i < 0x200; i++) {
+    for (int i = 0; i < 0x800; i++) {
         ram[i] = 0x00;
     }
+
+    u8 lsb = readMemory(0xFFFC);
+    u8 msb = readMemory(0xFFFD);
+
+    pc = (msb << 8) | lsb;
 }
 
-public void cpu::reset() {
-    pc
+void CPU::reset() {
+    s -= 3;
+    p.i = 1;
+
+    u8 lsb = readMemory(0xFFFC);
+    u8 msb = readMemory(0xFFFD);
+
+    pc = (msb << 8) | lsb;
 }
 
-public char cpu::readMemory(ushort addr) {
-    char mem = 0x00;
-    if (addr < 0x200) {
+u8 CPU::readMemory(u16 addr) {
+    u8 mem = 0x00;
+    if (addr < 0x800) {
         mem = ram[addr];
+    }
+    if (addr >= 0x4000) {
+        mem = gameCart->readMemory(addr);
     }
     tick();
     return mem;
 }
 
-public void cpu::writeMemory(ushort addr, char v) {
-    if (addr < 0x200) {
+void CPU::writeMemory(u16 addr, u8 v) {
+    printf("Writing 0x%02x to 0x%04x\n", v, addr);
+    if (addr < 0x800) {
         ram[addr] = v;
+    }
+    if (addr >= 0x4000) {
+        gameCart->writeMemory(addr, v);
     }
     tick();
 }
 
-public void cpu::tick() {
+void CPU::tick() {
+    usleep(10000);
     for (int i = 0; i < 3; i++) {
         ppu.tick();
     }
@@ -82,26 +104,30 @@ public void cpu::tick() {
     lastNmiLow = nmiLow;
 }
 
-public void cpu::tick(int n) {
+void CPU::tick(int n) {
     for (int i = 0; i < n; i++) {
         tick();
     }
 }
 
-public void cpu::op() {
+void CPU::bytePrint(u8 b) {
+    printf("0x%02x\n", b);
+}
+
+void CPU::op() {
     if (nmiActive) {
         readMemory(pc);
         writeMemory(0x100 | s--, pc >> 8);
         writeMemory(0x100 | s--, pc & 0xFF);
 
-        char b = *((char*) &p);
+        u8 b = *((u8*) &p);
         b |= 0b00110000;
         writeMemory(0x100 | s--, b);
 
         nmiActive = false;
 
-        char lsb = readMemory(0xFFFA);
-        char msb = readMemory(0xFFFB + 1);
+        u8 lsb = readMemory(0xFFFA);
+        u8 msb = readMemory(0xFFFB);
 
         pc = (msb << 8) | lsb;
         
@@ -111,7 +137,7 @@ public void cpu::op() {
         writeMemory(0x100 | s--, pc >> 8);
         writeMemory(0x100 | s--, pc & 0xFF);
 
-        ushort intVector;
+        u16 intVector;
         if (nmiActive) {
             intVector = 0xFFFA;
             nmiActive = false;
@@ -119,25 +145,40 @@ public void cpu::op() {
             intVector = 0xFFFE;
         }
 
-        char b = *((char*) &p);
+        u8 b = *((u8*) &p);
         b |= 0b00110000;
         writeMemory(0x100 | s--, b);
 
-        char lsb = readMemory(intVector);
-        char msb = readMemory(intVector + 1);
+        u8 lsb = readMemory(intVector);
+        u8 msb = readMemory(intVector + 1);
 
         pc = (msb << 8) | lsb;       
         return;
     }
 
-    char opcode = readMemory(pc++);
+    printf("0x%04x: ",  pc);
+    u8 opcode = readMemory(pc++);
+    printf("%s - ", opcodeNames[opcode]);
+    bytePrint(opcode);
+
+    // declare a bunch of stuff up here just for convenience (and because it's reused over cases)
+    
+    u16 addr = 0;
+    bool opcodeComplete = true;
+    u8 msb = 0;
+    u8 lsb = 0;
+
+    u8 m = 0;
+    u8 n = 0;
+    u8 b = 0;
+
+    u8 oldCarry = 0;
 
     // opcodes have a form 0b aaabbbcc
     // where aaa and cc determine opcode and bbb determines addressing mode
 
     switch (opcode & 0b11) {
     case 0b01: // first block of instructions
-        ushort addr = 0;
         switch ((opcode & 0b11100) >> 2) {
         case 0b000: // (zp, x)
             addr = indirxAddr();
@@ -178,15 +219,15 @@ public void cpu::op() {
             setZN(a);
             break;
         case 0b011: // ADC
-            char m = readMemory(addr);
-            char oldCarry = p.c;
+            m = readMemory(addr);
+            oldCarry = p.c;
             p.c = 0;
-            if ((int) (unsigned char) a + (int) (unsigned char) m > 255) p.c = 1;
+            if ((int) (u8) a + (int) (u8) m > 255) p.c = 1;
             
-            char n = a;
+            n = a;
             a = a + m + oldCarry;
             p.v = 0;
-            if ((n^a) & (m^a) & 0x80 != 0) p.v = 1;
+            if (((n^a) & (m^a) & 0x80) != 0) p.v = 1;
             setZN(a);
             break;
         case 0b100: // STA
@@ -200,130 +241,21 @@ public void cpu::op() {
             compare(addr, a);
             break;
         case 0b111: // SBC
-            char m = readMemory(addr);
-            char n = a;
-            char oldBorrow = 1 - p.c;
+            m = readMemory(addr);
+            n = a;
+            oldCarry = 1 - p.c;
             p.c = 1;
-            if ((int) a < (int) m + (int) oldBorrow) p.c = 0;
-            a = a - m - oldBorrow;
+            if ((int) a < (int) m + (int) oldCarry) p.c = 0;
+            a = a - m - oldCarry;
             p.v = 0;
-            if ((n^a) & ((~m)^a) & 0x80 != 0) p.v = 1;
+            if (((n^a) & ((~m)^a) & 0x80) != 0) p.v = 1;
             setZN(a);
             break;
         }
         break;
     case 0b10:
-        ushort addr = 0;
-        bool addrGot = true;
-        switch ((opcode & 0b11100) >> 2) {
-        case 0b000: // immediate
-            addr = immAddr();
-            break;
-        case 0b001: // zp
-            addr = zpAddr();
-            break;
-        case 0b010: // accumulator
-            break;
-        case 0b011: // abs
-            addr = absAddr();
-            break;
-        case 0b101: // zp, x
-            if (opcode == 0x96 || opcode == 0xB6) {
-                addr = zpyAddr();
-            } else {
-                addr = zpxAddr();
-            }
-            break;
-        case 0b111: // abs, x
-            if (opcode == 0xBE) {
-                addr = absyAddr(opcode);
-            } else {
-                addr = absxAddr(opcode);
-            }
-            break;
-        default:
-            addrGot = false;
-            break;
-        }
-        if (addrGot) {
-            switch (opcode >> 5) {
-            case 0b000: // ASL
-                if (opcode == 0x0A) {
-                    p.c = a >> 7;
-                    a <<= 1;
-                    setZN(a);
-                } else {
-                    char m = readMemory(addr);
-                    p.c = m >> 7;
-                    m <<= 1;
-                    writeMemory(addr, m);
-                    setZN(m);
-                }
-                break;
-            case 0b001: // ROL
-                if (opcode == 0x2A) {
-                    char old = p.c;
-                    p.c = a >> 7;
-                    a = (a << 1) | old;
-                    setZN(a);
-                } else {
-                    char m = readMemory(addr);
-                    char old = p.c;
-                    p.c = m >> 7;
-                    m = (m << 1) | old;
-                    writeMemory(addr, m);
-                    setZN(m);
-                }
-                break;
-            case 0b010: // ASL
-                if (opcode == 0x4A) {
-                    p.c = a & 0x01;
-                    a >>= 1;
-                    setZN(a);
-                } else {
-                    char m = readMemory(addr);
-                    p.c = m & 0x01;
-                    m >>= 1;
-                    writeMemory(addr, m);
-                    setZN(m);
-                }
-                break;
-            case 0b011: // ROR
-                if (opcode == 0x6A) {
-                    char old = p.c;
-                    p.c = a & 0x01;
-                    a = (a >> 1) | (old << 7);
-                    setZN(a);
-                } else {
-                    char m = readMemory(addr);
-                    char old = p.c;
-                    p.c = m & 0x01;
-                    m = (m >> 1) | (old << 7);
-                    writeMemory(addr, m);
-                    setZN(m);
-                }
-                break;
-            case 0b100: // STX
-                writeMemory(addr, x);
-                break;
-            case 0b101: // LDX
-                x = readMemory(addr);
-                setZN(x);
-                break;
-            case 0b110: // DEC
-                char m = readMemory(addr);
-                tick();
-                writeMemory(addr, m - 1);
-                setZN(m - 1);
-                break;
-            case 0b111: // INC
-                char m = readmemory(addr);
-                tick();
-                writememory(addr, m + 1);
-                setZN(m + 1);
-            }
-        } else {
-            switch (opcode) {
+        opcodeComplete = true;
+        switch (opcode) {
             case 0x8A: // TXA
                 a = x;
                 setZN(a);
@@ -348,6 +280,113 @@ public void cpu::op() {
             case 0xEA: // NOP
                 tick();
                 break;
+            default:
+                opcodeComplete = false;
+                break;
+            }
+            if (!opcodeComplete) {
+            switch ((opcode & 0b11100) >> 2) {
+            case 0b000: // immediate
+                addr = immAddr();
+                break;
+            case 0b001: // zp
+                addr = zpAddr();
+                break;
+            case 0b010: // accumulator
+                break;
+            case 0b011: // abs
+                addr = absAddr();
+                break;
+            case 0b101: // zp, x
+                if (opcode == 0x96 || opcode == 0xB6) {
+                    addr = zpyAddr();
+                } else {
+                    addr = zpxAddr();
+                }
+                break;
+            case 0b111: // abs, x
+                if (opcode == 0xBE) {
+                    addr = absyAddr(opcode);
+                } else {
+                    addr = absxAddr(opcode);
+                }
+                break;
+            }
+            switch (opcode >> 5) {
+            case 0b000: // ASL
+                if (opcode == 0x0A) {
+                    p.c = a >> 7;
+                    a <<= 1;
+                    setZN(a);
+                } else {
+                    m = readMemory(addr);
+                    p.c = m >> 7;
+                    m <<= 1;
+                    writeMemory(addr, m);
+                    setZN(m);
+                }
+                break;
+            case 0b001: // ROL
+                if (opcode == 0x2A) {
+                    oldCarry = p.c;
+                    p.c = a >> 7;
+                    a = (a << 1) | oldCarry;
+                    setZN(a);
+                } else {
+                    m = readMemory(addr);
+                    oldCarry = p.c;
+                    p.c = m >> 7;
+                    m = (m << 1) | oldCarry;
+                    writeMemory(addr, m);
+                    setZN(m);
+                }
+                break;
+            case 0b010: // ASL
+                if (opcode == 0x4A) {
+                    p.c = a & 0x01;
+                    a >>= 1;
+                    setZN(a);
+                } else {
+                    m = readMemory(addr);
+                    p.c = m & 0x01;
+                    m >>= 1;
+                    writeMemory(addr, m);
+                    setZN(m);
+                }
+                break;
+            case 0b011: // ROR
+                if (opcode == 0x6A) {
+                    oldCarry = p.c;
+                    p.c = a & 0x01;
+                    a = (a >> 1) | (oldCarry << 7);
+                    setZN(a);
+                } else {
+                    m = readMemory(addr);
+                    oldCarry = p.c;
+                    p.c = m & 0x01;
+                    m = (m >> 1) | (oldCarry << 7);
+                    writeMemory(addr, m);
+                    setZN(m);
+                }
+                break;
+            case 0b100: // STX
+                writeMemory(addr, x);
+                break;
+            case 0b101: // LDX
+                x = readMemory(addr);
+                setZN(x);
+                break;
+            case 0b110: // DEC
+                m = readMemory(addr);
+                tick();
+                writeMemory(addr, m - 1);
+                setZN(m - 1);
+                break;
+            case 0b111: // INC
+                m = readMemory(addr);
+                tick();
+                writeMemory(addr, m + 1);
+                setZN(m + 1);
             }
         }
         break;
@@ -359,7 +398,7 @@ public void cpu::op() {
             writeMemory(0x100 | s--, pc >> 8);
             writeMemory(0x100 | s--, pc & 0xFF);
 
-            ushort intVector;
+            u16 intVector;
             if (nmiActive) {
                 intVector = 0xFFFA;
                 nmiActive = false;
@@ -367,29 +406,30 @@ public void cpu::op() {
                 intVector = 0xFFFE;
             }
 
-            char b = *((char*) &p);
+            b = *((u8*) &p);
             b |= 0b00110000;
             writeMemory(0x100 | s--, b);
 
-            char lsb = readMemory(intVector);
-            char msb = readMemory(intVector + 1);
+            lsb = readMemory(intVector);
+            msb = readMemory(intVector + 1);
 
             pc = (msb << 8) | lsb;
             break;
         case 0x20: // JSR
-            char msb = readMemory(pc++);
+            lsb = readMemory(pc++);
             tick();
             writeMemory(0x100 | s--, pc >> 8);
             writeMemory(0x100 | s--, pc & 0xFF);
-            char lsb = readMemory(pc++);
+            msb = readMemory(pc++);
             pc = (msb << 8) | lsb;
             break;
         case 0x40: // RTI
             readMemory(pc++);
             
-            p = *((status*) &readMemory(0x100 | ++s));
-            char lsb = readMemory(0x100 | ++s);
-            char msb = readMemory(0x100 | ++s);
+            b = readMemory(0x100 | ++s);
+            p = *((status*) &b);
+            lsb = readMemory(0x100 | ++s);
+            msb = readMemory(0x100 | ++s);
             tick();
 
             pc = (msb << 8) | lsb;
@@ -397,13 +437,13 @@ public void cpu::op() {
             break;
         case 0x60: // RTS
             tick();
-            char lsb = readMemory(0x100 | ++s);
-            char msb = readMemory(0x100 | ++s);
+            lsb = readMemory(0x100 | ++s);
+            msb = readMemory(0x100 | ++s);
             tick();
             pc = ((msb << 8) | lsb) + 1;
             break;
         case 0x08: // PHP
-            char b = *((char*) &p);
+            b = *((u8*) &p);
             b |= 0b00110000;
             tick();
             writeMemory(0x100 | s--, b);
@@ -414,7 +454,7 @@ public void cpu::op() {
             break;
         case 0x28: // PLP
             tick(2);
-            char b = readMemory(0x100 | ++s);
+            b = readMemory(0x100 | ++s);
             p = *((status*) &b);
             break;
         case 0x38: // SEC
@@ -479,8 +519,7 @@ public void cpu::op() {
             break;
         }
         if (!opcodeComplete) {
-            ushort addr = 0;
-            bool branch = false;
+            bool isBranch = false;
             switch ((opcode & 0b11100) >> 2) {
             case 0b000:
                 addr = immAddr();
@@ -498,15 +537,12 @@ public void cpu::op() {
                 addr = absxAddr(opcode);
                 break;
             case 0b100: // Branch instructions
-                branch = true;
-                break;
-            default:
-                addrFound = false;
+                isBranch = true;
                 break;
             }
-            if (branch) {
-                char flag = 0;
-                char test = (opcode >> 5) & 0x01;
+            if (isBranch) {
+                u8 flag = 0;
+                u8 test = (opcode >> 5) & 0x01;
                 switch (opcode >> 6) {
                 case 0b00: // BMI, BPL
                     flag = p.n;
@@ -518,23 +554,23 @@ public void cpu::op() {
                     flag = p.c;
                     break;
                 case 0b11: // BEQ, BNE
-                    glaf = p.z;
+                    flag = p.z;
                     break;
                 }
                 branch(flag, test);
-            } else if (addrFound) {
+            } else {
                 switch (opcode >> 5) {
                 case 0b001: // BIT
-                    char res = a & readMemory(addr);
-                    setZN(res);
-                    p.v = (res >> 6) & 0x01;
+                    m = a & readMemory(addr);
+                    setZN(m);
+                    p.v = (m >> 6) & 0x01;
                     break;
                 case 0b010: // JMP
                     pc = addr;
                     break;
                 case 0b011: // JMP()
-                    char lsb = readMemory(addr);
-                    char msb = readMemory(addr + 1);
+                    lsb = readMemory(addr);
+                    msb = readMemory(addr + 1);
                     pc = ((msb << 8) | lsb);
                     break;
                 case 0b100: // STY
@@ -556,21 +592,21 @@ public void cpu::op() {
     }
 }
 
-private void cpu::branch(char flag, char test) {
-    char offset = readMemory(pc++);
+void CPU::branch(u8 flag, u8 test) {
+    u8 offset = readMemory(pc++);
     if (flag == test) {
         tick();
-        ushort page = pc & 0xFF00;
-        pc += offset;
-        if (pc & 0xFF00 != page) { // branch caused new page
+        u16 page = pc & 0xFF00;
+        pc += (s8) offset;
+        if ((pc & 0xFF00) != page) { // branch caused new page
             tick();
             pc = page | (pc & 0xFF);
         }
     }
 }
 
-private void cpu::compare(ushort addr, char reg) {
-    char m = readMemory(addr);
+void CPU::compare(u16 addr, u8 reg) {
+    u8 m = readMemory(addr);
     p.c = 0;
     if (reg >= m) p.c = 1;
     setZN(reg - m);
@@ -579,68 +615,68 @@ private void cpu::compare(ushort addr, char reg) {
 // Op code addressing modes
 // Each returns the address in memory to look at
 
-private ushort cpu::immAddr() {
+u16 CPU::immAddr() {
     return pc++;
 }
 
-private ushort cpu::zpAddr() {
+u16 CPU::zpAddr() {
     return readMemory(pc++);
 }
 
-private ushort cpu::zpxAddr() {
-    char zpAddr = readMemory(pc++);
+u16 CPU::zpxAddr() {
+    u8 zpAddr = readMemory(pc++);
     tick();
     return (zpAddr + x) & 0xFF;
 }
 
-private ushort cpu::zpyAddr() {
-    char zpAddr = readMemory(pc++);
+u16 CPU::zpyAddr() {
+    u8 zpAddr = readMemory(pc++);
     return (zpAddr + y) & 0xFF;
 }
 
-private ushort cpu::absAddr() {
-    ushort lsb = readMemory(pc++);
-    ushort msb = readMemory(pc++);
+u16 CPU::absAddr() {
+    u8 lsb = readMemory(pc++);
+    u8 msb = readMemory(pc++);
     return (msb << 8) | lsb;
 }
 
-private ushort cpu::absxAddr(char opcode) {
-    ushort base = absAddr();
-    ushort result = base + x;
-    if (opcode & 0xF == 0xE ||
+u16 CPU::absxAddr(u8 opcode) {
+    u16 base = absAddr();
+    u16 result = base + x;
+    if ((opcode & 0xF) == 0xE ||
         opcode == 0x9D ||
-        (result ^ base) & 0xFF00 != 0) {
+        ((result ^ base) & 0xFF00) != 0) {
         tick();
     }
     return result;
 }
 
-private ushort cpu::absyAddr(char opcode) {
-    ushort base = absAddr();
-    ushort result = base + y;
-    if (opcode == 0x99 || (result ^ base) & 0xFF00 != 0) {
+u16 CPU::absyAddr(u8 opcode) {
+    u16 base = absAddr();
+    u16 result = base + y;
+    if (opcode == 0x99 || ((result ^ base) & 0xFF00) != 0) {
         tick();
     }
     return result;
 }
 
-private ushort cpu::indirxAddr() {
-    ushort zpAddr = readMemory(pc++);
-    ushort lsb = readMemory(zpAddr + x);
-    ushort msb = readMemory(zpAddr + x + 1);
-    return (ushort) ((msb << 8) | lsb);
+u16 CPU::indirxAddr() {
+    u16 zpAddr = readMemory(pc++);
+    u8 lsb = readMemory(zpAddr + x);
+    u8 msb = readMemory(zpAddr + x + 1);
+    return (u16) ((msb << 8) | lsb);
 }
 
-private ushort cpu::indiryAddr() {
-    char zpAddr = readMemory(pc++);
-    ushort lsb = readMemory(zpAddr);
-    ushort msb = readMemory(zpAddr + 1);
-    return (ushort) (((msb << 8) | lsb) + y);
+u16 CPU::indiryAddr() {
+    u16 zpAddr = readMemory(pc++);
+    u8 lsb = readMemory(zpAddr);
+    u8 msb = readMemory(zpAddr + 1);
+    return (u16) (((msb << 8) | lsb) + y);
 }
 
 // Flag setting utilities
 
-private void cpu::setZN(char val) {
+void CPU::setZN(u8 val) {
     p.z = 0;
     if (val == 0) p.z = 1;
     p.n = val >> 7;
