@@ -21,6 +21,9 @@ struct status {
 class CPU {
 
 private:
+    int tickCount;
+    int lastTickCount;
+
     PPU ppu;
     cart* gameCart;
 
@@ -54,7 +57,7 @@ private:
     u16 absxAddr(u8 opcode);
     u16 absyAddr(u8 opcode);
     u16 indirxAddr();
-    u16 indiryAddr();
+    u16 indiryAddr(u8 opcode);
 
     void setZN(u8 val);
 

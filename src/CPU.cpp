@@ -21,6 +21,9 @@ CPU::~CPU() {
 }
 
 void CPU::powerOn() {
+    tickCount = 0;
+    lastTickCount = 0;
+
     *((u8*) &p) = 0x34;
 
     a = 0x00;
@@ -43,6 +46,9 @@ void CPU::powerOn() {
 }
 
 void CPU::reset() {
+    tickCount = 0;
+    lastTickCount = 0;
+
     s -= 3;
     p.i = 1;
 
@@ -65,7 +71,6 @@ u8 CPU::readMemory(u16 addr) {
 }
 
 void CPU::writeMemory(u16 addr, u8 v) {
-    printf("Writing 0x%02x to 0x%04x\n", v, addr);
     if (addr < 0x800) {
         ram[addr] = v;
     }
@@ -76,7 +81,8 @@ void CPU::writeMemory(u16 addr, u8 v) {
 }
 
 void CPU::tick() {
-    usleep(10000);
+    tickCount++;
+    usleep(5000);
     for (int i = 0; i < 3; i++) {
         ppu.tick();
     }
@@ -156,7 +162,10 @@ void CPU::op() {
         return;
     }
 
-    printf("0x%04x: ",  pc);
+    printf("Ticks: %d diff: %d - ", tickCount, tickCount - lastTickCount);
+    lastTickCount = tickCount;
+
+//    printf("0x%04x: ",  pc);
     u8 opcode = readMemory(pc++);
     printf("%s - ", opcodeNames[opcode]);
     bytePrint(opcode);
@@ -193,7 +202,7 @@ void CPU::op() {
             addr = absAddr();
             break;
         case 0b100: // (zp), y
-            addr = indiryAddr();
+            addr = indiryAddr(opcode);
             break;
         case 0b101: // zp, x
             addr = zpxAddr();
@@ -263,14 +272,17 @@ void CPU::op() {
                 break;
             case 0x9A: // TXS
                 s = x;
+                tick();
                 break;
             case 0xAA: // TAX
                 x = a;
                 setZN(x);
+                tick();
                 break;
             case 0xBA: // TSX
                 x = s;
                 setZN(x);
+                tick();
                 break;
             case 0xCA: // DEX
                 tick();
@@ -315,11 +327,13 @@ void CPU::op() {
             switch (opcode >> 5) {
             case 0b000: // ASL
                 if (opcode == 0x0A) {
+                    tick();
                     p.c = a >> 7;
                     a <<= 1;
                     setZN(a);
                 } else {
                     m = readMemory(addr);
+                    tick();
                     p.c = m >> 7;
                     m <<= 1;
                     writeMemory(addr, m);
@@ -328,12 +342,14 @@ void CPU::op() {
                 break;
             case 0b001: // ROL
                 if (opcode == 0x2A) {
+                    tick();
                     oldCarry = p.c;
                     p.c = a >> 7;
                     a = (a << 1) | oldCarry;
                     setZN(a);
                 } else {
                     m = readMemory(addr);
+                    tick();
                     oldCarry = p.c;
                     p.c = m >> 7;
                     m = (m << 1) | oldCarry;
@@ -343,11 +359,13 @@ void CPU::op() {
                 break;
             case 0b010: // ASL
                 if (opcode == 0x4A) {
+                    tick();
                     p.c = a & 0x01;
                     a >>= 1;
                     setZN(a);
                 } else {
                     m = readMemory(addr);
+                    tick();
                     p.c = m & 0x01;
                     m >>= 1;
                     writeMemory(addr, m);
@@ -356,12 +374,14 @@ void CPU::op() {
                 break;
             case 0b011: // ROR
                 if (opcode == 0x6A) {
+                    tick();
                     oldCarry = p.c;
                     p.c = a & 0x01;
                     a = (a >> 1) | (oldCarry << 7);
                     setZN(a);
                 } else {
                     m = readMemory(addr);
+                    tick();
                     oldCarry = p.c;
                     p.c = m & 0x01;
                     m = (m >> 1) | (oldCarry << 7);
@@ -662,15 +682,24 @@ u16 CPU::absyAddr(u8 opcode) {
 
 u16 CPU::indirxAddr() {
     u16 zpAddr = readMemory(pc++);
+    tick();
     u8 lsb = readMemory(zpAddr + x);
     u8 msb = readMemory(zpAddr + x + 1);
     return (u16) ((msb << 8) | lsb);
 }
 
-u16 CPU::indiryAddr() {
+u16 CPU::indiryAddr(u8 opcode) {
     u16 zpAddr = readMemory(pc++);
     u8 lsb = readMemory(zpAddr);
     u8 msb = readMemory(zpAddr + 1);
+
+    u16 addr = (msb << 8) | lsb;
+    u8 page = addr >> 8;
+    addr += y;
+    if ((addr >> 8) != page || opcode == 0x91) {
+        tick();
+    }
+
     return (u16) (((msb << 8) | lsb) + y);
 }
 
