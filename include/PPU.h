@@ -34,19 +34,34 @@ private:
     u8* vram;
     u8* paletteRam;
 
-    bool scrollLatch;
-    u8 scrollX;
+    bool w;
+    u8 fineX;
     u8 scrollY;
-
-    bool addrLatch;
 
     u8 oamAddr;
     u16 vramAddr;
+    u16 tempAddr;
+
+    u16 dot;
+    u16 scanline;
+
+    u8 lowBGPattern;
+    u8 highBGPattern;
+    u8 attr;
+
+    int frameCount;
 
     cart* gameCart;
 
+    void fillOam2();
+
     u8 readMemory(u16 addr);
     void writeMemory(u16 addr, u8 v);
+
+    void incAddrX(u16 &addr);
+    void incAddrY(u16 &addr);
+
+    void renderPixel(u16 dot, u16 scanline, u8 colour);
 public:
 
     PPU();
