@@ -2,7 +2,7 @@
 #include <unistd.h>
 #include "CPU.h"
 
-CPU::CPU() {
+CPU::CPU() : ppu() {
     ram = new u8[0x800];
     gameCart = new allsuite_cart();
 
@@ -21,6 +21,8 @@ CPU::~CPU() {
 }
 
 void CPU::powerOn() {
+    ppu.powerOn();
+
     tickCount = 0;
     lastTickCount = 0;
 
@@ -46,6 +48,8 @@ void CPU::powerOn() {
 }
 
 void CPU::reset() {
+    ppu.reset();
+
     tickCount = 0;
     lastTickCount = 0;
 
@@ -60,22 +64,36 @@ void CPU::reset() {
 
 u8 CPU::readMemory(u16 addr) {
     u8 mem = 0x00;
-    if (addr < 0x800) {
-        mem = ram[addr];
+    if (addr < 0x2000) {
+        mem = ram[addr & 0x7FF];
     }
     if (addr >= 0x4000) {
-        mem = gameCart->readMemory(addr);
+        mem = gameCart->readMemoryCPU(addr);
     }
     tick();
     return mem;
 }
 
 void CPU::writeMemory(u16 addr, u8 v) {
-    if (addr < 0x800) {
-        ram[addr] = v;
+    if (addr < 0x2000) {
+        ram[addr & 0x7FF] = v;
+    }
+    if (addr == 0x4014) {
+        tick(2);
+        if (tickCount % 2 == 1) {
+            tick();
+        }
+        
+        u16 tempAddr = v << 8;
+
+        for (int i = 0; i < 256; i++) {
+            u8 val = readMemory(tempAddr++);
+            ppu.writeOam(val);
+            tick();
+        }
     }
     if (addr >= 0x4000) {
-        gameCart->writeMemory(addr, v);
+        gameCart->writeMemoryCPU(addr, v);
     }
     tick();
 }

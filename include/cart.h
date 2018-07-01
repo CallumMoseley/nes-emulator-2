@@ -10,14 +10,21 @@ public:
     cart();
     virtual ~cart();
 
-    virtual u8 readMemory(u16 addr) = 0;
-    virtual void writeMemory(u16 addr, u8 v) = 0;
+    virtual u8 readMemoryCPU(u16 addr) = 0;
+    virtual void writeMemoryCPU(u16 addr, u8 v) = 0;
+
+    virtual u8 readMemoryPPU(u16 addr) = 0;
+    virtual void writeMemoryPPU(u16 addr, u8 v) = 0;
 };
 
 class allsuite_cart : public cart {
 public:
-    virtual u8 readMemory(u16 addr);
-    virtual void writeMemory(u16 addr, u8 v);
+    virtual u8 readMemoryCPU(u16 addr);
+    virtual void writeMemoryCPU(u16 addr, u8 v);
+
+    virtual u8 readMemoryPPU(u16 addr);
+    virtual void writeMemoryPPU(u16 addr, u8 v);
+
     allsuite_cart();
 
 private:

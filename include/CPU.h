@@ -19,7 +19,6 @@ struct status {
 };
 
 class CPU {
-
 private:
     int tickCount;
     int lastTickCount;

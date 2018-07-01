@@ -22,7 +22,7 @@ allsuite_cart::allsuite_cart() {
     printf("Done loading test suite into memory\n");
 }
 
-u8 allsuite_cart::readMemory(u16 addr) {
+u8 allsuite_cart::readMemoryCPU(u16 addr) {
     if (addr >= 0x4000) {
         if (addr - 0x4000 < memSize) {
             return memory[addr - 0x4000];
@@ -39,8 +39,14 @@ u8 allsuite_cart::readMemory(u16 addr) {
     return 0;
 }
 
-void allsuite_cart::writeMemory(u16 addr, u8 v) {
+void allsuite_cart::writeMemoryCPU(u16 addr, u8 v) {
     if (addr >= 0x4000 && addr < 0x4000 + memSize) {
         memory[addr] = v;
     }
 }
+
+u8 allsuite_cart::readMemoryPPU(u16 addr) {
+    return 0x00;
+}
+
+void allsuite_cart::writeMemoryPPU(u16 addr, u8 v) {}
