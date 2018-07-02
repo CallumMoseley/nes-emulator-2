@@ -3,7 +3,7 @@ INCLUDE_DIR=include
 OBJ_DIR=build
 SRC_DIR=src
 FLAGS=-g -Wall -I$(INCLUDE_DIR) -std=c++11 -I/usr/include/SDL2 -D_REENTRANT -L/usr/lib/x86_64-linux-gnu -lSDL2
-objects=CPU.o PPU.o NES.o main.o cart.o
+objects=CPU.o PPU.o NES.o main.o cart.o allsuite_cart.o cart000.o
 OBJS=$(foreach obj,$(objects),$(OBJ_DIR)/$(obj))
 
 vpath %.cpp $(SRC_DIR)
@@ -22,5 +22,9 @@ $(OBJ_DIR)/main.o : main.cpp NES.h
 	$(CC) -c $(SRC_DIR)/main.cpp -o $@ $(FLAGS)
 $(OBJ_DIR)/cart.o : cart.cpp cart.h
 	$(CC) -c $(SRC_DIR)/cart.cpp -o $@ $(FLAGS)
+$(OBJ_DIR)/allsuite_cart.o : carts/allsuite_cart.cpp cart.h
+	$(CC) -c $(SRC_DIR)/carts/allsuite_cart.cpp -o $@ $(FLAGS)
+$(OBJ_DIR)/cart000.o : carts/cart000.cpp cart.h
+	$(CC) -c $(SRC_DIR)/carts/cart000.cpp -o $@ $(FLAGS)
 clean:
 	rm build/*.o NESemu

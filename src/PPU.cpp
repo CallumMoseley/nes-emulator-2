@@ -169,34 +169,36 @@ void PPU::loadTile() {
 void PPU::tick() {
     // Visible scanlines
     if (scanline >= 0 && scanline < 240) {
-        if (dot == 0) {
-            SDL_LockTexture(texture, nullptr, (void**) &pixels, &pitch);
-        }
-        if (scanline == 0 && dot == 0 && frameCount % 2 == 1) dot++;
-        // Regular NT, AT fetch, rendering
-        if (dot > 0 && dot <= 256) {
-            if (dot >= 2) {
-                shiftRegisters();
+        if (bgEn || sprEn) {
+            if (dot == 0) {
+                SDL_LockTexture(texture, nullptr, (void**) &pixels, &pitch);
             }
-            u8 bgPattern = ((highBGShift2 >> (7 - fineX)) & 0x01) << 1 |
-                           ((lowBGShift2 >> (7 - fineX)) & 0x01);
-            
-            u8 bgColour = readMemory(0x3F00 | (attr << 2) | bgPattern);
+            if (scanline == 0 && dot == 0 && frameCount % 2 == 1) dot++;
+            // Regular NT, AT fetch, rendering
+            if (dot > 0 && dot <= 256) {
+                if (dot >= 2) {
+                    shiftRegisters();
+                }
+                u8 bgPattern = ((highBGShift2 >> (7 - fineX)) & 0x01) << 1 |
+                               ((lowBGShift2 >> (7 - fineX)) & 0x01);
+                
+                u8 bgColour = readMemory(0x3F00 | (attr << 2) | bgPattern);
 
-            renderPixel(bgColour);
+                renderPixel(bgColour);
 
-            // Load next tile (cheating by doing it all at once)
-            if (dot % 8 == 0) {
+                // Load next tile (cheating by doing it all at once)
+                if (dot % 8 == 0) {
+                    loadTile();
+                }
+            } else if (dot == 257) {
+                vramAddr = (vramAddr & ~0x41F) | (tempAddr & 0x41F);
+                shiftRegisters();
+            } else if (dot == 328 || dot == 336) {
                 loadTile();
             }
-        } else if (dot == 257) {
-            vramAddr = (vramAddr & ~0x41F) | (tempAddr & 0x41F);
-            shiftRegisters();
-        } else if (dot == 328 || dot == 336) {
-            loadTile();
         }
     } else if (scanline == 240) {
-        if (dot == 0) {
+        if ((bgEn || sprEn) && dot == 0) {
             SDL_UnlockTexture(texture);
             SDL_RenderCopy(renderer, texture, nullptr, nullptr);
             SDL_RenderPresent(renderer);
@@ -343,7 +345,7 @@ u8 PPU::readRegister(u16 addr) {
     u8 ret = 0x00;
     switch (addr) {
         case 0x02: // PPUSTATUS
-            ret = ((nmiOccurred && nmiEnabled) << 7) | (s0hit << 6) | (sprOverflow << 5);
+            ret = (nmiOccurred << 7) | (s0hit << 6) | (sprOverflow << 5);
             nmiOccurred = false;
             w = false;
             return ret;
@@ -363,4 +365,8 @@ u8 PPU::readRegister(u16 addr) {
 
 void PPU::writeOam(u8 v) {
     oam[oamAddr++] = v;
+}
+
+bool PPU::nmiLow() {
+    return nmiOccurred && nmiEnabled;
 }

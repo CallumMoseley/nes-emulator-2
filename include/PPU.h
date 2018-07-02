@@ -151,6 +151,7 @@ public:
     u8 readRegister(u16 addr);
 
     void writeOam(u8 v);
+    bool nmiLow();
 };
 
 #endif

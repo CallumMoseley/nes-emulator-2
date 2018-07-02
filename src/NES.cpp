@@ -10,7 +10,17 @@ void NES::start() {
     cpu.powerOn();
     ppu.powerOn();
 
+    SDL_Event event;
+
+    bool quit = false;
     for (;;) {
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) {
+                quit = true;
+                break;
+            }
+        }
+        if (quit) break;
         cpu.op();
     }
 }

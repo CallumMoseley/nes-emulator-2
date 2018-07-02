@@ -6,7 +6,6 @@ CPU::CPU(PPU* ppu) {
     this->ppu = ppu;
     ram = new u8[0x800];
 
-    nmiLow = false;
     lastNmiLow = false;
     nmiEdgeDetected = false;
     nmiActive = false;
@@ -32,7 +31,6 @@ void CPU::powerOn() {
 
     s = 0xFD;
 
-    nmiLow = false;
     lastNmiLow = false;
 
     for (int i = 0; i < 0x800; i++) {
@@ -117,11 +115,11 @@ void CPU::tick() {
         nmiEdgeDetected = false;
     }
 
-    if (nmiLow && !lastNmiLow) {
+    if (ppu->nmiLow() && !lastNmiLow) {
         nmiEdgeDetected = true;
     }
 
-    lastNmiLow = nmiLow;
+    lastNmiLow = ppu->nmiLow();
 }
 
 void CPU::tick(int n) {
@@ -174,7 +172,12 @@ void CPU::op() {
 
     lastTickCount = tickCount;
 
+    if (pc == 0xC85F) {
+        printf("break\n");
+    }
+
     u8 opcode = readMemory(pc++);
+    printf("Op: %s\n", opcodeNames[opcode]);
 
     // declare a bunch of stuff up here just for convenience (and because it's reused over cases)
     
