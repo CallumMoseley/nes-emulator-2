@@ -14,12 +14,9 @@ allsuite_cart::allsuite_cart() {
     char* readData = new char[size];
     testBin.read(readData, size);
     
-    printf("Loading test suite into memory:\n");
     for (int i = 0; i < size; i++) {
         memory[i] = readData[i];
-        printf("0x%02x\n", memory[i]);
     }
-    printf("Done loading test suite into memory\n");
 }
 
 u8 allsuite_cart::readMemoryCPU(u16 addr) {

@@ -2,9 +2,9 @@
 #include <unistd.h>
 #include "CPU.h"
 
-CPU::CPU() : ppu() {
+CPU::CPU(PPU* ppu) {
+    this->ppu = ppu;
     ram = new u8[0x800];
-    gameCart = new allsuite_cart();
 
     nmiLow = false;
     lastNmiLow = false;
@@ -21,8 +21,6 @@ CPU::~CPU() {
 }
 
 void CPU::powerOn() {
-    ppu.powerOn();
-
     tickCount = 0;
     lastTickCount = 0;
 
@@ -48,8 +46,6 @@ void CPU::powerOn() {
 }
 
 void CPU::reset() {
-    ppu.reset();
-
     tickCount = 0;
     lastTickCount = 0;
 
@@ -66,8 +62,9 @@ u8 CPU::readMemory(u16 addr) {
     u8 mem = 0x00;
     if (addr < 0x2000) {
         mem = ram[addr & 0x7FF];
-    }
-    if (addr >= 0x4000) {
+    } else if (addr < 0x4000) {
+        mem = ppu->readRegister(addr);
+    } else if (addr >= 0x4020) {
         mem = gameCart->readMemoryCPU(addr);
     }
     tick();
@@ -77,8 +74,9 @@ u8 CPU::readMemory(u16 addr) {
 void CPU::writeMemory(u16 addr, u8 v) {
     if (addr < 0x2000) {
         ram[addr & 0x7FF] = v;
-    }
-    if (addr == 0x4014) {
+    } else if (addr < 0x4000) {
+        ppu->writeRegister(addr, v);
+    } else if (addr == 0x4014) {
         tick(2);
         if (tickCount % 2 == 1) {
             tick();
@@ -88,11 +86,10 @@ void CPU::writeMemory(u16 addr, u8 v) {
 
         for (int i = 0; i < 256; i++) {
             u8 val = readMemory(tempAddr++);
-            ppu.writeOam(val);
+            ppu->writeOam(val);
             tick();
         }
-    }
-    if (addr >= 0x4000) {
+    } else if (addr >= 0x4020) {
         gameCart->writeMemoryCPU(addr, v);
     }
     tick();
@@ -100,9 +97,8 @@ void CPU::writeMemory(u16 addr, u8 v) {
 
 void CPU::tick() {
     tickCount++;
-    usleep(5000);
     for (int i = 0; i < 3; i++) {
-        ppu.tick();
+        ppu->tick();
     }
 
     irqActive = false;
@@ -132,10 +128,6 @@ void CPU::tick(int n) {
     for (int i = 0; i < n; i++) {
         tick();
     }
-}
-
-void CPU::bytePrint(u8 b) {
-    printf("0x%02x\n", b);
 }
 
 void CPU::op() {
@@ -180,13 +172,9 @@ void CPU::op() {
         return;
     }
 
-    printf("Ticks: %d diff: %d - ", tickCount, tickCount - lastTickCount);
     lastTickCount = tickCount;
 
-//    printf("0x%04x: ",  pc);
     u8 opcode = readMemory(pc++);
-    printf("%s - ", opcodeNames[opcode]);
-    bytePrint(opcode);
 
     // declare a bunch of stuff up here just for convenience (and because it's reused over cases)
     

@@ -1,10 +1,46 @@
 #include "PPU.h"
+#include <cstdio>
 
-PPU::PPU() {
+PPU::PPU(SDL_Renderer* renderer) {
+    this->renderer = renderer;
+    this->texture = SDL_CreateTexture(renderer,
+                                      SDL_PIXELFORMAT_ARGB8888,
+                                      SDL_TEXTUREACCESS_STREAMING,
+                                      256,
+                                      240);
+
     oam = new u8[0x100];
     oam2 = new u8[8];
     vram = new u8[0x800];
     paletteRam = new u8[0x20];
+
+    pixels = nullptr;
+
+    oamAddr = 0x00;
+    vramAddr = 0x0000;
+
+    w = false;
+
+    nmiOccurred = false;
+    s0hit = false;
+    sprOverflow = false;
+
+    frameCount = 0;
+
+    scanline = 0;
+    dot = 0;
+    
+    fineX = 0;
+
+    oamAddr = 0x00;
+    vramAddr = 0x00;
+    tempAddr = 0x00;
+
+    lowBGShift1 = 0;
+    highBGShift1 = 0;
+    lowBGShift2 = 0;
+    highBGShift2 = 0;
+    attr = 0;
 }
 
 void PPU::powerOn() {
@@ -15,14 +51,26 @@ void PPU::powerOn() {
 
     w = false;
 
-    scrollX = 0x00;
-    scrollY = 0x00;
-
-    inVblank = false;
+    nmiOccurred = false;
     s0hit = false;
     sprOverflow = false;
 
     frameCount = 0;
+
+    scanline = 0;
+    dot = 0;
+    
+    fineX = 0;
+
+    oamAddr = 0x00;
+    vramAddr = 0x00;
+    tempAddr = 0x00;
+
+    lowBGShift1 = 0;
+    highBGShift1 = 0;
+    lowBGShift2 = 0;
+    highBGShift2 = 0;
+    attr = 0;
 }
 
 void PPU::reset() {
@@ -30,11 +78,27 @@ void PPU::reset() {
     writeRegister(0x2001, 0x00);
 
     w = false;
-
-    scrollX = 0x00;
-    scrollY = 0x00;
-
     frameCount = 0;
+    nmiOccurred = false;
+
+    scanline = 0;
+    dot = 0;
+
+    fineX = 0;
+
+    oamAddr = 0x00;
+    vramAddr = 0x00;
+    tempAddr = 0x00;
+
+    bgPatternTable = 0;
+    sprPatternTable = 0;
+    vramInc = 1;
+
+    lowBGShift1 = 0;
+    highBGShift1 = 0;
+    lowBGShift2 = 0;
+    highBGShift2 = 0;
+    attr = 0;
 }
 
 void PPU::incAddrX(u16 &addr) {
@@ -64,50 +128,110 @@ void PPU::incAddrY(u16 &addr) {
     }
 }
 
-void PPU::incAddrX(u16 &addr) {
-    if ((addr & 0x001F) == 31) {
-        addr &= ~0x001F;
-        addr ^= 0x0400;
+void PPU::shiftRegisters() {
+    lowBGShift2 <<= 1;
+    highBGShift2 <<= 1;
+
+    lowBGShift2 |= (lowBGShift1 >> 7);
+    highBGShift2 |= (highBGShift1 >> 7);
+
+    lowBGShift1 <<= 1;
+    highBGShift1 <<= 1;
+}
+
+void PPU::loadTile() {
+    // Fetch nametable byte from current nametable at position
+    u8 ntByte = readMemory(0x2000 | (vramAddr & 0x0FFF));
+    // Fetch attribute table byte from nametable at current address
+    u8 attrByte = readMemory(0x23C0 | (vramAddr & 0x0C00) | ((vramAddr >> 4) & 0x38) | ((vramAddr >> 2) & 0x07));
+
+    // Determine which quadrant this nametable byte occupies
+    u8 attrQuad = ((vramAddr & 0x20) >> 5) | ((vramAddr >> 1) & 0x01);
+    // Get the 2 bit attribute information for the current quadrant
+    attr = attrByte >> (attrQuad * 2) & 0x03;
+
+    // Fine y position for fetching information from pattern table
+    u8 fineY = (vramAddr & 0x7000) >> 24;
+    // Address into pattern table
+    u16 patternAddr = (bgPatternTable << 12) | (ntByte << 4) | fineY;
+
+    // Background tile pattern info
+    lowBGShift1 = readMemory(patternAddr);
+    highBGShift1 = readMemory(patternAddr | 0x0008);
+
+    if (dot != 256) {
+        incAddrX(vramAddr);
     } else {
-        addr++;
+        incAddrY(vramAddr);
     }
 }
 
 void PPU::tick() {
     // Visible scanlines
     if (scanline >= 0 && scanline < 240) {
+        if (dot == 0) {
+            SDL_LockTexture(texture, nullptr, (void**) &pixels, &pitch);
+        }
         if (scanline == 0 && dot == 0 && frameCount % 2 == 1) dot++;
-        if (dot != 0) {
-            // Regular NT, AT fetch, rendering
-            if (dot <= 256) {
-                u8 tilePos = (dot - 1) % 8;
-                u8 bgPattern = ((highBGPattern >> (7 - tilePos)) & 0x01) << 1 |
-                               ((highBGPattern >> (7 - tilePos)) & 0x01);
-                if (dot % 8 == 0) {
-                    // Fetch nametable byte from current nametable at position
-                    u8 ntByte = readMemory(0x2000 | (vramAddr & 0x0FFF));
-                    // Fetch attribute table byte from nametable at current address
-                    u8 attrByte = readMemory(0x23C0 | (vramAddr & 0x0C00) | ((vramAddr >> 4) & 0x38) | ((vramAddr >> 2) & 0x07));
-
-                    // Determine which quadrant this nametable byte occupies
-                    u8 attrQuad = ((vramAddr & 0x20) >> 5) | ((vramAddr >> 1) & 0x01);
-                    // Get the 2 bit attribute information for the current quadrant
-                    attr = attrByte >> (attrQuad * 2) & 0x03;
-
-                    // Fine y position for fetching information from pattern table
-                    u8 fineY = (vramAddr & 0x7000) >> 24;
-                    // Address into pattern table
-                    u16 patternAddr = (bgPatternTable << 12) | (ntByte << 4) | fineY;
-
-                    // Background tile pattern info
-                    lowBGPattern = readMemory(patternAddr);
-                    highBGPattern = readMemory(patternAddr | 0x0008);
-
-                    incAddrX(vramAddr);
-                }
+        // Regular NT, AT fetch, rendering
+        if (dot > 0 && dot <= 256) {
+            if (dot >= 2) {
+                shiftRegisters();
             }
+            u8 bgPattern = ((highBGShift2 >> (7 - fineX)) & 0x01) << 1 |
+                           ((lowBGShift2 >> (7 - fineX)) & 0x01);
+            
+            u8 bgColour = readMemory(0x3F00 | (attr << 2) | bgPattern);
+
+            renderPixel(bgColour);
+
+            // Load next tile (cheating by doing it all at once)
+            if (dot % 8 == 0) {
+                loadTile();
+            }
+        } else if (dot == 257) {
+            vramAddr = (vramAddr & ~0x41F) | (tempAddr & 0x41F);
+            shiftRegisters();
+        } else if (dot == 328 || dot == 336) {
+            loadTile();
+        }
+    } else if (scanline == 240) {
+        if (dot == 0) {
+            SDL_UnlockTexture(texture);
+            SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+            SDL_RenderPresent(renderer);
+        }
+    } else if (scanline == 241) {
+        if (dot == 1) {
+            nmiOccurred = true;
+        }
+    } else if (scanline == 261) {
+        if (dot == 1) {
+            nmiOccurred = false;
+            s0hit = false;
+            sprOverflow = false;
+        } else if (dot == 304) {
+            vramAddr = (vramAddr & ~0x7BE0) | (tempAddr & 0x7BE0);
+        } else if (dot == 257) {
+            vramAddr = (vramAddr & ~0x41F) | (tempAddr & 0x41F);
+            shiftRegisters();
+        } else if (dot == 328 || dot == 336) {
+            loadTile();
+        } else if (dot == 340) {
+            frameCount++;
         }
     }
+
+    dot++;
+    if (dot == 341) {
+        scanline++;
+    }
+    dot %= 341;
+    scanline %= 262;
+}
+
+void PPU::renderPixel(u8 colour) {
+    pixels[scanline * 256 + dot - 1] = colours[colour & 0x3F];
 }
 
 void PPU::fillOam2() { // Cheaty, not entirely accurate
@@ -216,11 +340,11 @@ void PPU::writeRegister(u16 addr, u8 v) {
 
 u8 PPU::readRegister(u16 addr) {
     addr &= 0x0F;
-    u8 ret;
+    u8 ret = 0x00;
     switch (addr) {
         case 0x02: // PPUSTATUS
-            ret = (inVblank << 7) | (s0hit << 6) | (sprOverflow << 5);
-            inVblank = false;
+            ret = ((nmiOccurred && nmiEnabled) << 7) | (s0hit << 6) | (sprOverflow << 5);
+            nmiOccurred = false;
             w = false;
             return ret;
             break;
@@ -234,6 +358,7 @@ u8 PPU::readRegister(u16 addr) {
         default:
             break;
     }
+    return ret;
 }
 
 void PPU::writeOam(u8 v) {

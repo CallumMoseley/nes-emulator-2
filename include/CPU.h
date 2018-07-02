@@ -23,8 +23,7 @@ private:
     int tickCount;
     int lastTickCount;
 
-    PPU ppu;
-    cart* gameCart;
+    PPU* ppu;
 
     u8 a, x, y, s;
     u16 pc;
@@ -44,8 +43,6 @@ private:
 
     void tick(int n);
     void tick();
-
-    void bytePrint(u8 b);
 
     // Addressing mode tools
     u16 immAddr();
@@ -83,7 +80,9 @@ private:
      "BEQ r","SBC (d),Y","Sbc (d)","sbc (d,S),Y","pea a"  ,"SBC d,X","INC d,X","sbc [d],Y","SED","SBC a,Y","Plx"  ,"xce","jsr (a,X)","SBC a,X","INC a,X","sbc al,X"};
 
 public:
-    CPU();
+    cart* gameCart;
+
+    CPU(PPU* ppu);
     ~CPU();
 
     void powerOn();

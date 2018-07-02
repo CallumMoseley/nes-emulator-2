@@ -17,6 +17,10 @@ public:
     virtual void writeMemoryPPU(u16 addr, u8 v) = 0;
 };
 
+class cart00 {
+
+}
+
 class allsuite_cart : public cart {
 public:
     virtual u8 readMemoryCPU(u16 addr);
