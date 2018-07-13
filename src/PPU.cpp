@@ -14,6 +14,8 @@ PPU::PPU(SDL_Renderer* renderer) {
     vram = new u8[0x800];
     paletteRam = new u8[0x20];
 
+    initializeMemory();
+
     pixels = nullptr;
 
     oamAddr = 0x00;
@@ -41,6 +43,28 @@ PPU::PPU(SDL_Renderer* renderer) {
     lowBGShift2 = 0;
     highBGShift2 = 0;
     attr = 0;
+}
+
+PPU::~PPU() {
+    delete[] oam;
+    delete[] oam2;
+    delete[] vram;
+    delete[] paletteRam;
+}
+
+void PPU::initializeMemory() {
+    for (int i = 0; i < 0x100; i++) {
+        oam[i] = 0x00;
+    }
+    for (int i = 0; i < 8; i++) {
+        oam2[i] = 0x00;
+    }
+    for (int i = 0; i < 0x800; i++) {
+        vram[i] = 0x00;
+    }
+    for (int i = 0; i < 0x20; i++) {
+        paletteRam[i] = 0x00;
+    }
 }
 
 void PPU::powerOn() {
@@ -151,7 +175,7 @@ void PPU::loadTile() {
     attr = attrByte >> (attrQuad * 2) & 0x03;
 
     // Fine y position for fetching information from pattern table
-    u8 fineY = (vramAddr & 0x7000) >> 24;
+    u8 fineY = (vramAddr & 0x7000) >> 12;
     // Address into pattern table
     u16 patternAddr = (bgPatternTable << 12) | (ntByte << 4) | fineY;
 
@@ -193,8 +217,11 @@ void PPU::tick() {
             } else if (dot == 257) {
                 vramAddr = (vramAddr & ~0x41F) | (tempAddr & 0x41F);
                 shiftRegisters();
-            } else if (dot == 328 || dot == 336) {
-                loadTile();
+            } else if (dot >= 332 && dot <= 337) {
+                shiftRegisters();
+                if (dot % 8 == 0) {
+                    loadTile();
+                }
             }
         }
     } else if (scanline == 240) {
@@ -213,12 +240,18 @@ void PPU::tick() {
             s0hit = false;
             sprOverflow = false;
         } else if (dot == 304) {
-            vramAddr = (vramAddr & ~0x7BE0) | (tempAddr & 0x7BE0);
+            if (sprEn || bgEn) {
+                vramAddr = (vramAddr & ~0x7BE0) | (tempAddr & 0x7BE0);
+            }
         } else if (dot == 257) {
-            vramAddr = (vramAddr & ~0x41F) | (tempAddr & 0x41F);
-            shiftRegisters();
+            if (sprEn || bgEn) {
+                vramAddr = (vramAddr & ~0x41F) | (tempAddr & 0x41F);
+                shiftRegisters();
+            }
         } else if (dot == 328 || dot == 336) {
-            loadTile();
+            if (sprEn || bgEn) {
+                loadTile();
+            }
         } else if (dot == 340) {
             frameCount++;
         }
@@ -251,8 +284,16 @@ u8 PPU::readMemory(u16 addr) {
         return gameCart->readMemoryPPU(addr);
     } else if (addr < 0x3EFF) {
         addr &= 0x2FFF;
-        // TODO nametable mirroring
-        return vram[addr & 0x2FFF];
+
+        if (gameCart->vMirror) {
+            addr &= ~0x0800;
+        } else {
+            u8 bit11 = (addr & 0x0800) >> 11;
+            addr &= ~0x0C00;
+            addr |= bit11 << 10;
+        }
+
+        return vram[addr & 0x7FF];
     } else if (addr < 0x4000) {
         addr &= 0xFF1F;
         if ((addr & 0x03) == 0) {
@@ -270,8 +311,16 @@ void PPU::writeMemory(u16 addr, u8 v) {
         gameCart->writeMemoryPPU(addr, v);
     } else if (addr < 0x3EFF) {
         addr &= 0x2FFF;
-        // TODO nametable mirroring
-        vram[addr & 0x2FFF] = v;
+
+        if (gameCart->vMirror) {
+            addr &= ~0x0800;
+        } else {
+            u8 bit11 = (addr & 0x0800) >> 11;
+            addr &= ~0x0C00;
+            addr |= bit11 << 10;
+        }
+
+        vram[addr & 0x7FF] = v;
     } else if (addr < 0x4000) {
         addr &= 0xFF1F;
         if ((addr & 0x03) == 0) {
@@ -294,7 +343,7 @@ void PPU::writeRegister(u16 addr, u8 v) {
             largeSprites = v >> 5 & 0x01;
             bgPatternTable = v >> 4 & 0x01;
             sprPatternTable = v >> 3 & 0x01;
-            vramInc = (v >> 2) * 31 + 1;
+            vramInc = ((v >> 2) & 0x01) * 31 + 1;
             tempAddr = (v & 0x03) << 10;
             break;
         case 0x01: // PPUMASK
@@ -369,4 +418,48 @@ void PPU::writeOam(u8 v) {
 
 bool PPU::nmiLow() {
     return nmiOccurred && nmiEnabled;
+}
+
+void PPU::printNametable(u16 addr) {
+    u16 addrCopy = addr;
+
+    for (int i = 0; i < 30; i++) {
+        for (int j = 0; j < 32; j++) {
+            printf("+------");
+        }
+        printf("+\n");
+
+        for (int j = 0; j < 32; j++) {
+            printf("|      ");
+        }
+        printf("|\n");
+
+        for (int j = 0; j < 32; j++) {
+            printf("| 0x%02x ", readMemory(addrCopy));
+            addrCopy++;
+        }
+        printf("|\n");
+
+        for (int j = 0; j < 32; j++) {
+            printf("|      ");
+        }
+        printf("|\n");
+    }
+}
+
+void PPU::printPattern(u8 table, u8 pattern) {
+    for (u8 i = 0; i < 8; i++) {
+        u16 addr = (table << 12) | (pattern << 4) | i;
+        u8 lowByte = readMemory(addr);
+        u8 highByte = readMemory(addr | 0x8);
+        for (int j = 7; j >= 0; j--) {
+            u8 bit = (((highByte >> j) & 0x01) << 1) | ((lowByte >> j) & 0x01);
+            if (bit == 0) {
+                printf(".");
+            } else {
+                printf("%d", bit);
+            }
+        }
+        printf("\n");
+    }
 }

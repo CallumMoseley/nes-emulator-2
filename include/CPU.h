@@ -20,26 +20,26 @@ struct status {
 
 class CPU {
 private:
-    int tickCount;
-    int lastTickCount;
+    int tickCount = 0;
+    int lastTickCount = 0;
 
-    PPU* ppu;
+    PPU* ppu = nullptr;
 
-    u8 a, x, y, s;
-    u16 pc;
+    u8 a = 0, x = 0, y = 0, s = 0;
+    u16 pc = 0;
 
     status p;
 
-    u8* ram;
+    u8* ram = nullptr;
 
-    bool nmiLow;
-    bool lastNmiLow;
-    bool nmiEdgeDetected;
-    bool nmiActive;
+    bool nmiLow = false;
+    bool lastNmiLow = false;
+    bool nmiEdgeDetected = false;
+    bool nmiActive = false;
 
-    bool irqLow;
-    bool irqLevelDetected;
-    bool irqActive;
+    bool irqLow = false;
+    bool irqLevelDetected = false;
+    bool irqActive = false;
 
     void tick(int n);
     void tick();
@@ -80,7 +80,7 @@ private:
      "BEQ r","SBC (d),Y","Sbc (d)","sbc (d,S),Y","pea a"  ,"SBC d,X","INC d,X","sbc [d],Y","SED","SBC a,Y","Plx"  ,"xce","jsr (a,X)","SBC a,X","INC a,X","sbc al,X"};
 
 public:
-    cart* gameCart;
+    cart* gameCart = nullptr;
 
     CPU(PPU* ppu);
     ~CPU();

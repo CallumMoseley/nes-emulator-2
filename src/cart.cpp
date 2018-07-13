@@ -3,7 +3,7 @@
 cart::cart() {}
 cart::~cart() {}
 
-cart* cart::fromFile(char* filename) {
+cart* cart::fromFile(char filename[]) {
     std::ifstream file(filename, std::ios::in | std::ios::ate | std::ios::binary);
 //    int size = file.tellg();
     file.seekg(0, std::ios::beg);
@@ -40,7 +40,9 @@ cart* cart::fromFile(char* filename) {
         file.read((char*) (prgRom), prgSize * 0x4000);
         file.read((char*) (chrRom), chrSize * 0x2000);
 
-        cart* game = new cart000(prgSize, chrSize, prgRom, chrRom);
+        cart* game = new cart000(prgSize, chrSize, prgRom, chrRom, b6 & 0x01);
+        delete[] prgRom;
+        delete[] chrRom;
         return game;
     }
 

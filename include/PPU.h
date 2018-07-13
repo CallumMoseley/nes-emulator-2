@@ -12,52 +12,52 @@ typedef signed char s8;
 class PPU {
 private:
 
-    SDL_Renderer* renderer;
-    SDL_Texture* texture;
+    SDL_Renderer* renderer = nullptr;
+    SDL_Texture* texture = nullptr;
 
-    uint32_t* pixels;
-    int pitch;
+    uint32_t* pixels = nullptr;
+    int pitch = 0;
 
-    bool s0hit;
-    bool sprOverflow;
+    bool s0hit = false;
+    bool sprOverflow = false;
 
-    bool grey;
+    bool grey = false;
 
-    bool bgLeft, sprLeft;
-    bool bgEn, sprEn;
+    bool bgLeft = false, sprLeft = false;
+    bool bgEn = false, sprEn = false;
 
-    bool nmiEnabled;
-    bool nmiOccurred;
-    bool largeSprites;
+    bool nmiEnabled = false;
+    bool nmiOccurred = false;
+    bool largeSprites = false;
 
-    bool boostR, boostG, boostB;
+    bool boostR = false, boostG = false, boostB = false;
 
-    u8 bgPatternTable;
-    u8 sprPatternTable;
-    u8 vramInc;
+    u8 bgPatternTable = 0;
+    u8 sprPatternTable = 0;
+    u8 vramInc = 1;
 
-    u8* oam;
-    u8* oam2;
-    u8* vram;
-    u8* paletteRam;
+    u8* oam = nullptr;
+    u8* oam2 = nullptr;
+    u8* vram = nullptr;
+    u8* paletteRam = nullptr;
 
-    bool w;
-    u8 fineX;
+    bool w = false;
+    u8 fineX = 0;
 
-    u8 oamAddr;
-    u16 vramAddr;
-    u16 tempAddr;
+    u8 oamAddr = 0x00;
+    u16 vramAddr = 0x00;
+    u16 tempAddr = 0x00;
 
-    u16 dot;
-    u16 scanline;
+    u16 dot = 0;
+    u16 scanline = 0;
 
-    u8 lowBGShift1;
-    u8 highBGShift1;
-    u8 lowBGShift2;
-    u8 highBGShift2;
-    u8 attr;
+    u8 lowBGShift1 = 0;
+    u8 highBGShift1 = 0;
+    u8 lowBGShift2 = 0;
+    u8 highBGShift2 = 0;
+    u8 attr = 0;
 
-    int frameCount;
+    int frameCount = 0;
 
     void fillOam2();
 
@@ -70,6 +70,7 @@ private:
     void loadTile();
 
     void renderPixel(u8 colour);
+    void initializeMemory();
 
     uint32_t colours[64] = {
         0xff545454,
@@ -139,9 +140,10 @@ private:
     };
 
 public:
-    cart* gameCart;
+    cart* gameCart = nullptr;
 
     PPU(SDL_Renderer* renderer);
+    ~PPU();
 
     void powerOn();
     void reset();
@@ -152,6 +154,12 @@ public:
 
     void writeOam(u8 v);
     bool nmiLow();
+
+
+    // Debug stuff
+
+    void printNametable(u16 addr);
+    void printPattern(u8 table, u8 pattern);
 };
 
 #endif

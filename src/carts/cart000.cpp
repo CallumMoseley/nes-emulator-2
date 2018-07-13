@@ -1,10 +1,14 @@
 #include "cart.h"
 
-cart000::cart000(int prgBanks, int chrBanks, u8* prg, u8* chr) {
+cart000::cart000(int prgBanks, int chrBanks, u8* prg, u8* chr, bool v) {
     this->prgBanks = prgBanks;
     this->chrBanks = chrBanks;
-    this->prg = prg;
-    this->chr = chr;
+    this->prg = new u8[prgBanks * 0x4000];
+    this->chr = new u8[chrBanks * 0x2000];
+    memcpy(this->prg, prg, prgBanks * 0x4000);
+    memcpy(this->chr, chr, chrBanks * 0x2000);
+
+    vMirror = v;
 }
 cart000::~cart000() {
     delete[] prg;

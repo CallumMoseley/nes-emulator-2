@@ -2,6 +2,7 @@
 #define CART_H
 
 #include <cstdio>
+#include <cstring>
 #include <fstream>
 
 typedef unsigned short u16;
@@ -10,7 +11,9 @@ typedef signed char s8;
 
 class cart {
 public:
-    static cart* fromFile(char* filename);
+    bool vMirror;
+
+    static cart* fromFile(char filename[]);
 
     cart();
     virtual ~cart();
@@ -24,9 +27,7 @@ public:
 
 class cart000 : public cart {
 public:
-    bool vMirror;
-
-    cart000(int prgBanks, int chrBanks, u8* prg, u8* chr);
+    cart000(int prgBanks, int chrBanks, u8* prg, u8* chr, bool v);
     ~cart000();
 
     virtual u8 readMemoryCPU(u16 addr);

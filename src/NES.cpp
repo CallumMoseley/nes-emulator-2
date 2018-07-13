@@ -2,6 +2,10 @@
 
 NES::NES(SDL_Renderer* renderer) : cpu(&ppu), ppu(renderer) {}
 
+NES::~NES() {
+    delete gameCart;
+}
+
 void NES::start() {
 //    gameCart = new allsuite_cart();
     gameCart = cart::fromFile("roms/donkey_kong.nes");

@@ -5,14 +5,6 @@
 CPU::CPU(PPU* ppu) {
     this->ppu = ppu;
     ram = new u8[0x800];
-
-    lastNmiLow = false;
-    nmiEdgeDetected = false;
-    nmiActive = false;
-
-    irqLow = false;
-    irqLevelDetected = false;
-    irqActive = false;
 }
 
 CPU::~CPU() {
@@ -135,7 +127,7 @@ void CPU::op() {
         writeMemory(0x100 | s--, pc & 0xFF);
 
         u8 b = *((u8*) &p);
-        b |= 0b00110000;
+        b |= 0b00100000;
         writeMemory(0x100 | s--, b);
 
         nmiActive = false;
@@ -160,7 +152,7 @@ void CPU::op() {
         }
 
         u8 b = *((u8*) &p);
-        b |= 0b00110000;
+        b |= 0b00100000;
         writeMemory(0x100 | s--, b);
 
         u8 lsb = readMemory(intVector);
@@ -172,12 +164,8 @@ void CPU::op() {
 
     lastTickCount = tickCount;
 
-    if (pc == 0xC85F) {
-        printf("break\n");
-    }
-
     u8 opcode = readMemory(pc++);
-    printf("Op: %s\n", opcodeNames[opcode]);
+    //printf("%04x: %s\n", pc - 1, opcodeNames[opcode]);//0xfcb6
 
     // declare a bunch of stuff up here just for convenience (and because it's reused over cases)
     
@@ -629,7 +617,6 @@ void CPU::branch(u8 flag, u8 test) {
         pc += (s8) offset;
         if ((pc & 0xFF00) != page) { // branch caused new page
             tick();
-            pc = page | (pc & 0xFF);
         }
     }
 }

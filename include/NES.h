@@ -15,6 +15,7 @@ private:
 
 public:
     NES(SDL_Renderer* renderer);
+    ~NES();
 
     void start();
 };
