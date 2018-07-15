@@ -1,14 +1,15 @@
 #include "NES.h"
 
-NES::NES(SDL_Renderer* renderer) : cpu(&ppu), ppu(renderer) {}
+NES::NES(SDL_Renderer* renderer) : cpu(&ppu, &ctrl1, &ctrl2), ppu(renderer),
+                                   ctrl1(1), ctrl2(2) {}
 
 NES::~NES() {
     delete gameCart;
 }
 
 void NES::start() {
-//    gameCart = new allsuite_cart();
     gameCart = cart::fromFile("roms/donkey_kong.nes");
+//    gameCart = cart::fromFile("roms/smb.nes");
     cpu.gameCart = gameCart;
     ppu.gameCart = gameCart;
     cpu.powerOn();

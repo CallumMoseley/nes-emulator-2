@@ -4,10 +4,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_render.h>
 #include "cart.h"
-
-typedef unsigned short u16;
-typedef unsigned char u8;
-typedef signed char s8;
+#include "types.h"
 
 class PPU {
 private:
@@ -55,11 +52,17 @@ private:
     u8 highBGShift1 = 0;
     u8 lowBGShift2 = 0;
     u8 highBGShift2 = 0;
+    u8 highAttrShift = 0;
+    u8 lowAttrShift = 0;
     u8 attr = 0;
+
+    u8* lowSprShift = nullptr;
+    u8* highSprShift = nullptr;
 
     int frameCount = 0;
 
     void fillOam2();
+    void updateOam2();
 
     u8 readMemory(u16 addr);
     void writeMemory(u16 addr, u8 v);
@@ -160,6 +163,7 @@ public:
 
     void printNametable(u16 addr);
     void printPattern(u8 table, u8 pattern);
+    void printByte(u8 b);
 };
 
 #endif

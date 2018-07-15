@@ -2,8 +2,10 @@
 #include <unistd.h>
 #include "CPU.h"
 
-CPU::CPU(PPU* ppu) {
+CPU::CPU(PPU* ppu, controller* ctrl1, controller* ctrl2) {
     this->ppu = ppu;
+    this->ctrl1 = ctrl1;
+    this->ctrl2 = ctrl2;
     ram = new u8[0x800];
 }
 
@@ -54,7 +56,13 @@ u8 CPU::readMemory(u16 addr) {
         mem = ram[addr & 0x7FF];
     } else if (addr < 0x4000) {
         mem = ppu->readRegister(addr);
-    } else if (addr >= 0x4020) {
+    } else if (addr < 0x4020) {
+        if (addr == 0x4016) {
+            mem = ctrl1->readBit();
+        } else if (addr == 0x4017) {
+            mem = ctrl2->readBit();
+        }
+    } else {
         mem = gameCart->readMemoryCPU(addr);
     }
     tick();
@@ -66,20 +74,27 @@ void CPU::writeMemory(u16 addr, u8 v) {
         ram[addr & 0x7FF] = v;
     } else if (addr < 0x4000) {
         ppu->writeRegister(addr, v);
-    } else if (addr == 0x4014) {
-        tick(2);
-        if (tickCount % 2 == 1) {
-            tick();
-        }
-        
-        u16 tempAddr = v << 8;
+    } else if (addr < 0x4020) {
+        if (addr == 0x4014) {
+            tick(2);
+            if (tickCount % 2 == 1) {
+                tick();
+            }
+            
+            u16 tempAddr = v << 8;
 
-        for (int i = 0; i < 256; i++) {
-            u8 val = readMemory(tempAddr++);
-            ppu->writeOam(val);
-            tick();
+            for (int i = 0; i < 256; i++) {
+                u8 val = readMemory(tempAddr++);
+                ppu->writeOam(val);
+                tick();
+            }
+        } else if (addr == 0x4016) {
+            if (v == 0) {
+                ctrl1->grabState();
+                ctrl2->grabState();
+            }
         }
-    } else if (addr >= 0x4020) {
+    } else {
         gameCart->writeMemoryCPU(addr, v);
     }
     tick();

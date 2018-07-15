@@ -4,10 +4,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
-
-typedef unsigned short u16;
-typedef unsigned char u8;
-typedef signed char s8;
+#include "types.h"
 
 class cart {
 public:

@@ -1,12 +1,10 @@
 #ifndef CPU_H
 #define CPU_H
 
+#include "controller.h"
 #include "PPU.h"
 #include "cart.h"
-
-typedef unsigned short u16;
-typedef unsigned char u8;
-typedef signed char s8;
+#include "types.h"
 
 struct status {
     u8 c : 1;
@@ -24,6 +22,8 @@ private:
     int lastTickCount = 0;
 
     PPU* ppu = nullptr;
+    controller* ctrl1 = nullptr;
+    controller* ctrl2 = nullptr;
 
     u8 a = 0, x = 0, y = 0, s = 0;
     u16 pc = 0;
@@ -82,7 +82,7 @@ private:
 public:
     cart* gameCart = nullptr;
 
-    CPU(PPU* ppu);
+    CPU(PPU* ppu, controller* ctrl1, controller* ctrl2);
     ~CPU();
 
     void powerOn();

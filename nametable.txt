@@ -15,7 +15,7 @@ bit 1: determines left/right
 Note: this is lying, the indices along the top are actually just the lowest 5 bits of the address (but i don't want to put the full binary address
 
         | xx00 | xx01 | xx02 | xx03 | xx04 | xx05 | xx06 | xx07 | xx08 | xx09 | xx0A | xx0B  ...  xx1F |
-        +----------------------------------------------------------------------------------- ... ------+
+        +------+------+------+------+------+------+------+------+------+------+------+------ ... ------+
         |      |      |      |      |      |      |      |      |      |      |      |                 |
 2000    |  ul  |  ul  |  ur  |  ur  |      |      |      |      |      |      |      |                 |
         |      |      |      |      |      |      |      |      |      |      |      |                 |

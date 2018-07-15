@@ -10,9 +10,12 @@ PPU::PPU(SDL_Renderer* renderer) {
                                       240);
 
     oam = new u8[0x100];
-    oam2 = new u8[8];
+    oam2 = new u8[0x20];
     vram = new u8[0x800];
     paletteRam = new u8[0x20];
+
+    lowSprShift = new u8[8];
+    highSprShift = new u8[8];
 
     initializeMemory();
 
@@ -50,13 +53,15 @@ PPU::~PPU() {
     delete[] oam2;
     delete[] vram;
     delete[] paletteRam;
+    delete[] lowSprShift;
+    delete[] highSprShift;
 }
 
 void PPU::initializeMemory() {
     for (int i = 0; i < 0x100; i++) {
         oam[i] = 0x00;
     }
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 0x20; i++) {
         oam2[i] = 0x00;
     }
     for (int i = 0; i < 0x800; i++) {
@@ -64,6 +69,11 @@ void PPU::initializeMemory() {
     }
     for (int i = 0; i < 0x20; i++) {
         paletteRam[i] = 0x00;
+    }
+
+    for (int i = 0; i < 8; i++) {
+        lowSprShift[i] = 0;
+        highSprShift[i] = 0;
     }
 }
 
@@ -161,6 +171,9 @@ void PPU::shiftRegisters() {
 
     lowBGShift1 <<= 1;
     highBGShift1 <<= 1;
+
+    lowAttrShift = (lowAttrShift << 1) | (attr & 0x01);
+    highAttrShift = (highAttrShift << 1) | ((attr >> 1) & 0x01);
 }
 
 void PPU::loadTile() {
@@ -170,7 +183,7 @@ void PPU::loadTile() {
     u8 attrByte = readMemory(0x23C0 | (vramAddr & 0x0C00) | ((vramAddr >> 4) & 0x38) | ((vramAddr >> 2) & 0x07));
 
     // Determine which quadrant this nametable byte occupies
-    u8 attrQuad = ((vramAddr & 0x20) >> 5) | ((vramAddr >> 1) & 0x01);
+    u8 attrQuad = ((vramAddr & 0x20) >> 6) | ((vramAddr >> 1) & 0x01);
     // Get the 2 bit attribute information for the current quadrant
     attr = attrByte >> (attrQuad * 2) & 0x03;
 
@@ -183,7 +196,7 @@ void PPU::loadTile() {
     lowBGShift1 = readMemory(patternAddr);
     highBGShift1 = readMemory(patternAddr | 0x0008);
 
-    if (dot != 256) {
+    if (dot != 257) {
         incAddrX(vramAddr);
     } else {
         incAddrY(vramAddr);
@@ -203,25 +216,68 @@ void PPU::tick() {
                 if (dot >= 2) {
                     shiftRegisters();
                 }
-                u8 bgPattern = ((highBGShift2 >> (7 - fineX)) & 0x01) << 1 |
+                u8 bgPixel = ((highBGShift2 >> (7 - fineX)) & 0x01) << 1 |
                                ((lowBGShift2 >> (7 - fineX)) & 0x01);
-                
-                u8 bgColour = readMemory(0x3F00 | (attr << 2) | bgPattern);
 
-                renderPixel(bgColour);
+                u8 attrBits = ((highAttrShift >> (7 - fineX)) & 0x01) << 1 |
+                               ((lowAttrShift >> (7 - fineX)) & 0x01);
+                
+                u8 bgColour = readMemory(0x3F00 | (attrBits << 2) | bgPixel);
+
+                u8 sprPixel = 0;
+                int sprInd = 0;
+                for (sprInd = 0; sprInd < 8; sprInd++) {
+                    sprPixel = ((highSprShift[sprInd] >> 6) & 0x02) |
+                                (lowSprShift[sprInd] >> 7);
+                    if (sprPixel != 0) {
+                        break;
+                    }
+                }
+                u8 sprColour = 0;
+                if (sprInd != 8) {
+                    sprColour = readMemory(0x3F00 | ((oam2[sprInd * 4 + 2] & 0x03) << 2) | sprPixel);
+                }
+                sprInd %= 8;
+
+                if (!bgEn || !sprEn) {
+                    if (bgEn) {
+                        renderPixel(bgColour);
+                    } else {
+                        renderPixel(sprColour);
+                    }
+                } else {
+                    if (bgPixel == 0 && sprPixel == 0) {
+                        renderPixel(readMemory(0x3F00));
+                    } else if (sprPixel == 0) {
+                        renderPixel(bgColour);
+                    } else if (bgPixel == 0) {
+                        renderPixel(sprColour);
+                    } else {
+                        if (((oam2[sprInd * 4 + 2] >> 5) & 0x01) == 0) {
+                            renderPixel(sprColour);
+                        } else {
+                            renderPixel(bgColour);
+                        }
+                    }
+                }
 
                 // Load next tile (cheating by doing it all at once)
-                if (dot % 8 == 0) {
+                if (dot % 8 == 1 && dot != 1) {
                     loadTile();
                 }
+
+                updateOam2();
             } else if (dot == 257) {
+                shiftRegisters();
+                loadTile();
                 vramAddr = (vramAddr & ~0x41F) | (tempAddr & 0x41F);
+            } else if (dot >= 322 && dot <= 337) {
                 shiftRegisters();
-            } else if (dot >= 332 && dot <= 337) {
-                shiftRegisters();
-                if (dot % 8 == 0) {
+                if (dot % 8 == 1) {
                     loadTile();
                 }
+            } else if (dot == 340) {
+                fillOam2();
             }
         }
     } else if (scanline == 240) {
@@ -239,18 +295,21 @@ void PPU::tick() {
             nmiOccurred = false;
             s0hit = false;
             sprOverflow = false;
+        } else if (dot == 257) {
+            if (sprEn || bgEn) {
+                vramAddr = (vramAddr & ~0x41F) | (tempAddr & 0x41F);
+            }
         } else if (dot == 304) {
             if (sprEn || bgEn) {
                 vramAddr = (vramAddr & ~0x7BE0) | (tempAddr & 0x7BE0);
             }
-        } else if (dot == 257) {
+        
+        } else if (dot >= 322 && dot <= 337) {
             if (sprEn || bgEn) {
-                vramAddr = (vramAddr & ~0x41F) | (tempAddr & 0x41F);
-                shiftRegisters();
-            }
-        } else if (dot == 328 || dot == 336) {
-            if (sprEn || bgEn) {
-                loadTile();
+            shiftRegisters();
+                if (dot % 8 == 1) {
+                    loadTile();
+                }
             }
         } else if (dot == 340) {
             frameCount++;
@@ -272,9 +331,48 @@ void PPU::renderPixel(u8 colour) {
 void PPU::fillOam2() { // Cheaty, not entirely accurate
     u8 pos = 0;
     // scan oam
-    for (int i = 0x00; i < 0xFF && pos < 8; i += 0x04) {
+    for (int i = 0; i < 0xFF && pos < 8; i += 0x04) {
         if (scanline >= oam[i] && scanline < oam[i] + 8) {
-            oam2[pos++] = i;
+            for (int j = 0; j < 4; j++) {
+                oam2[pos * 4 + j] = oam[i + j];
+            }
+            pos++;
+        }
+    }
+}
+
+void PPU::updateOam2() {
+    for (int i = 0; i < 8; i++) {
+        if (oam2[i * 4 + 3] > 0) {
+            oam2[i * 4 + 3]--;
+            if (oam2[i * 4 + 3] == 0) {
+                u8 y = oam2[i * 4];
+                u8 tile = oam2[i * 4 + 1];
+                u8 info = oam2[i * 4 + 2];
+                u8 table = sprPatternTable;
+                if (largeSprites) {
+                    table = tile & 0x01; 
+                    tile &= 0xFE;
+                    if (scanline - y >= 8) {
+                        tile |= 0x01;
+                    }
+                }
+                u16 patternAddr = (table << 12) | (tile << 4) | ((scanline - y) & 0x7);
+                u8 lowByte = readMemory(patternAddr);
+                u8 highByte = readMemory(patternAddr | 0x08);
+                if ((info >> 6) & 0x01 == 1) {
+                    for (int i = 0; i < 8; i++) {
+                        lowSprShift[i] |= ((lowByte >> i) & 0x01) << (7 - i);
+                        highSprShift[i] |= ((highByte >> i) & 0x01) << (7 - i);
+                    }
+                } else {
+                    lowSprShift[i] = lowByte;
+                    highSprShift[i] = highByte;
+                }
+            }
+        } else {
+            lowSprShift[i] <<= 1;
+            highSprShift[i] <<= 1;
         }
     }
 }
@@ -435,7 +533,37 @@ void PPU::printNametable(u16 addr) {
         printf("|\n");
 
         for (int j = 0; j < 32; j++) {
-            printf("| 0x%02x ", readMemory(addrCopy));
+            u8 byte = readMemory(addrCopy);
+            // Fetch attribute table byte from nametable at current address
+            u8 attrByte = readMemory(0x23C0 | (addrCopy & 0x0C00) | ((addrCopy >> 4) & 0x38) | ((addrCopy >> 2) & 0x07));
+
+            // Determine which quadrant this nametable byte occupies
+            u8 attrQuad = ((addrCopy & 0x20) >> 6) | ((addrCopy >> 1) & 0x01);
+            // Get the 2 bit attribute information for the current quadrant
+            u8 attrBits = attrByte >> (attrQuad * 2) & 0x03;
+            if (byte != 0x24) {
+               printf("| 0b%d%d ", attrBits >> 1, attrBits & 0x01);
+            } else {
+                printf("|      ");
+            }
+            addrCopy++;
+        }
+        printf("|\n");
+        addrCopy -= 32;
+
+        for (int j = 0; j < 32; j++) {
+            printf("|      ");
+        }
+        printf("|\n");
+
+        for (int j = 0; j < 32; j++) {
+            u8 byte = readMemory(addrCopy);
+
+            if (byte != 0x24) {
+                printf("| 0x%02x ", byte);
+            } else {
+                printf("|      ");
+            }
             addrCopy++;
         }
         printf("|\n");
@@ -462,4 +590,12 @@ void PPU::printPattern(u8 table, u8 pattern) {
         }
         printf("\n");
     }
+}
+
+
+void PPU::printByte(u8 b) {
+    for (int i = 0; i < 8; i++) {
+        printf("%d", (b >> (7 - i)) & 0x01);
+    }
+    printf("\n");
 }
