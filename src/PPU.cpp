@@ -235,7 +235,7 @@ void PPU::tick() {
                 }
                 u8 sprColour = 0;
                 if (sprInd != 8) {
-                    sprColour = readMemory(0x3F00 | ((oam2[sprInd * 4 + 2] & 0x03) << 2) | sprPixel);
+                    sprColour = readMemory(0x3F10 | ((oam2[sprInd * 4 + 2] & 0x03) << 2) | sprPixel);
                 }
                 sprInd %= 8;
 
@@ -344,6 +344,8 @@ void PPU::fillOam2() { // Cheaty, not entirely accurate
 void PPU::updateOam2() {
     for (int i = 0; i < 8; i++) {
         if (oam2[i * 4 + 3] > 0) {
+            lowSprShift[i] = 0;
+            highSprShift[i] = 0;
             oam2[i * 4 + 3]--;
             if (oam2[i * 4 + 3] == 0) {
                 u8 y = oam2[i * 4];
@@ -357,13 +359,17 @@ void PPU::updateOam2() {
                         tile |= 0x01;
                     }
                 }
-                u16 patternAddr = (table << 12) | (tile << 4) | ((scanline - y) & 0x7);
+                u8 fineY = ((scanline - y - 1) & 0x7);
+                if (info >> 7) {
+                    fineY = 7 - fineY;
+                }
+                u16 patternAddr = (table << 12) | (tile << 4) | fineY;
                 u8 lowByte = readMemory(patternAddr);
                 u8 highByte = readMemory(patternAddr | 0x08);
-                if ((info >> 6) & 0x01 == 1) {
-                    for (int i = 0; i < 8; i++) {
-                        lowSprShift[i] |= ((lowByte >> i) & 0x01) << (7 - i);
-                        highSprShift[i] |= ((highByte >> i) & 0x01) << (7 - i);
+                if (((info >> 6) & 0x01) == 1) {
+                    for (int j = 0; j < 8; j++) {
+                        lowSprShift[i] |= ((lowByte >> j) & 0x01) << (7 - j);
+                        highSprShift[i] |= ((highByte >> j) & 0x01) << (7 - j);
                     }
                 } else {
                     lowSprShift[i] = lowByte;
