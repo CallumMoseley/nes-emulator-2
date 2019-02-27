@@ -2,9 +2,7 @@
 #include <SDL2/SDL_render.h>
 #include <cstdio>
 #include "NES.h"
-
-#define SCREEN_WIDTH 256
-#define SCREEN_HEIGHT 240
+#include "constants.h"
 
 int main() {
     SDL_Window* window = nullptr;
@@ -19,11 +17,12 @@ int main() {
     window = SDL_CreateWindow("NES Emulator",
                               SDL_WINDOWPOS_UNDEFINED,
                               SDL_WINDOWPOS_UNDEFINED,
-                              SCREEN_WIDTH,
-                              SCREEN_HEIGHT,
+                              SCREEN_WIDTH * SCALE,
+                              SCREEN_HEIGHT * SCALE,
                               SDL_WINDOW_SHOWN);
 
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    SDL_RenderSetScale(renderer, SCALE, SCALE);
 
     NES nes(renderer);
     nes.start();

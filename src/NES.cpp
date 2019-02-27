@@ -8,8 +8,7 @@ NES::~NES() {
 }
 
 void NES::start() {
-    gameCart = cart::fromFile("roms/donkey_kong.nes");
-//    gameCart = cart::fromFile("roms/smb.nes");
+    gameCart = cart::fromFile("roms/nestest.nes");
     cpu.gameCart = gameCart;
     ppu.gameCart = gameCart;
     cpu.powerOn();

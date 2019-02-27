@@ -1,5 +1,7 @@
 #include "PPU.h"
+#include "constants.h"
 #include <cstdio>
+#include <cstdlib>
 
 PPU::PPU(SDL_Renderer* renderer) {
     this->renderer = renderer;
@@ -183,7 +185,7 @@ void PPU::loadTile() {
     u8 attrByte = readMemory(0x23C0 | (vramAddr & 0x0C00) | ((vramAddr >> 4) & 0x38) | ((vramAddr >> 2) & 0x07));
 
     // Determine which quadrant this nametable byte occupies
-    u8 attrQuad = ((vramAddr & 0x20) >> 6) | ((vramAddr >> 1) & 0x01);
+    u8 attrQuad = ((vramAddr & 0x40) >> 5) | ((vramAddr >> 1) & 0x01);
     // Get the 2 bit attribute information for the current quadrant
     attr = attrByte >> (attrQuad * 2) & 0x03;
 
@@ -206,10 +208,10 @@ void PPU::loadTile() {
 void PPU::tick() {
     // Visible scanlines
     if (scanline >= 0 && scanline < 240) {
+        if (dot == 0) {
+            SDL_LockTexture(texture, nullptr, (void**) &pixels, &pitch);
+        }
         if (bgEn || sprEn) {
-            if (dot == 0) {
-                SDL_LockTexture(texture, nullptr, (void**) &pixels, &pitch);
-            }
             if (scanline == 0 && dot == 0 && frameCount % 2 == 1) dot++;
             // Regular NT, AT fetch, rendering
             if (dot > 0 && dot <= 256) {
@@ -525,16 +527,17 @@ bool PPU::nmiLow() {
 }
 
 void PPU::printNametable(u16 addr) {
+    system("clear");
     u16 addrCopy = addr;
 
     for (int i = 0; i < 30; i++) {
         for (int j = 0; j < 32; j++) {
-            printf("+------");
+            printf("+----------");
         }
         printf("+\n");
 
         for (int j = 0; j < 32; j++) {
-            printf("|      ");
+            printf("|          ");
         }
         printf("|\n");
 
@@ -544,13 +547,13 @@ void PPU::printNametable(u16 addr) {
             u8 attrByte = readMemory(0x23C0 | (addrCopy & 0x0C00) | ((addrCopy >> 4) & 0x38) | ((addrCopy >> 2) & 0x07));
 
             // Determine which quadrant this nametable byte occupies
-            u8 attrQuad = ((addrCopy & 0x20) >> 6) | ((addrCopy >> 1) & 0x01);
+            u8 attrQuad = ((addrCopy & 0x40) >> 5) | ((addrCopy >> 1) & 0x01);
             // Get the 2 bit attribute information for the current quadrant
             u8 attrBits = attrByte >> (attrQuad * 2) & 0x03;
             if (byte != 0x24) {
-               printf("| 0b%d%d ", attrBits >> 1, attrBits & 0x01);
+               printf("| Q%d  0b%d%d ", attrQuad, attrBits >> 1, attrBits & 0x01);
             } else {
-                printf("|      ");
+                printf("|          ");
             }
             addrCopy++;
         }
@@ -558,7 +561,7 @@ void PPU::printNametable(u16 addr) {
         addrCopy -= 32;
 
         for (int j = 0; j < 32; j++) {
-            printf("|      ");
+            printf("|          ");
         }
         printf("|\n");
 
@@ -566,16 +569,16 @@ void PPU::printNametable(u16 addr) {
             u8 byte = readMemory(addrCopy);
 
             if (byte != 0x24) {
-                printf("| 0x%02x ", byte);
+                printf("|   0x%02x   ", byte);
             } else {
-                printf("|      ");
+                printf("|          ");
             }
             addrCopy++;
         }
         printf("|\n");
 
         for (int j = 0; j < 32; j++) {
-            printf("|      ");
+            printf("|          ");
         }
         printf("|\n");
     }

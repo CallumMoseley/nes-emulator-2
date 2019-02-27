@@ -28,7 +28,7 @@ private:
     u8 a = 0, x = 0, y = 0, s = 0;
     u16 pc = 0;
 
-    status p;
+    status p = {0, 0, 0, 0, 0, 0, 0};
 
     u8* ram = nullptr;
 

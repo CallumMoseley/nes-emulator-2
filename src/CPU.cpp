@@ -179,8 +179,12 @@ void CPU::op() {
 
     lastTickCount = tickCount;
 
+    if (pc == 0xC28F) {
+        printf("Breaking at %04x\n", pc);
+    }
     u8 opcode = readMemory(pc++);
-    //printf("%04x: %s\n", pc - 1, opcodeNames[opcode]);//0xfcb6
+    printf("%04x: %s\n", pc - 1, opcodeNames[opcode]);//0xfcb6
+
 
     // declare a bunch of stuff up here just for convenience (and because it's reused over cases)
     
