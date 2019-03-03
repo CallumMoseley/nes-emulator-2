@@ -89,10 +89,8 @@ void CPU::writeMemory(u16 addr, u8 v) {
                 tick();
             }
         } else if (addr == 0x4016) {
-            if (v == 0) {
-                ctrl1->grabState();
-                ctrl2->grabState();
-            }
+            ctrl1->grabState();
+            ctrl2->grabState();
         }
     } else {
         gameCart->writeMemoryCPU(addr, v);
@@ -179,12 +177,11 @@ void CPU::op() {
 
     lastTickCount = tickCount;
 
-    if (pc == 0xC28F) {
+    /*if (pc == 0xDBB5) {
         printf("Breaking at %04x\n", pc);
-    }
+    }*/
     u8 opcode = readMemory(pc++);
-    printf("%04x: %s\n", pc - 1, opcodeNames[opcode]);//0xfcb6
-
+    // printf("%04x: %s\n", pc - 1, opcodeNames[opcode]);//0xfcb6
 
     // declare a bunch of stuff up here just for convenience (and because it's reused over cases)
     
@@ -196,6 +193,7 @@ void CPU::op() {
     u8 m = 0;
     u8 n = 0;
     u8 b = 0;
+    u8 page = 0;
 
     u8 oldCarry = 0;
 
@@ -247,7 +245,7 @@ void CPU::op() {
             m = readMemory(addr);
             oldCarry = p.c;
             p.c = 0;
-            if ((int) (u8) a + (int) (u8) m > 255) p.c = 1;
+            if ((int) a + (int) m + oldCarry > 255) p.c = 1;
             
             n = a;
             a = a + m + oldCarry;
@@ -508,6 +506,7 @@ void CPU::op() {
         case 0x68: // PLA
             tick(2);
             a = readMemory(0x100 | ++s);
+            setZN(a);
             break;
         case 0x78: // SEI
             tick();
@@ -597,16 +596,18 @@ void CPU::op() {
             } else {
                 switch (opcode >> 5) {
                 case 0b001: // BIT
-                    m = a & readMemory(addr);
-                    setZN(m);
+                    m = readMemory(addr);
+                    setZN(a & m);
                     p.v = (m >> 6) & 0x01;
+                    p.n = (m >> 7) & 0x01;
                     break;
                 case 0b010: // JMP
                     pc = addr;
                     break;
                 case 0b011: // JMP()
+                    page = addr >> 8;
                     lsb = readMemory(addr);
-                    msb = readMemory(addr + 1);
+                    msb = readMemory((page << 8) | ((addr + 1) & 0xFF));
                     pc = ((msb << 8) | lsb);
                     break;
                 case 0b100: // STY
@@ -698,15 +699,15 @@ u16 CPU::absyAddr(u8 opcode) {
 u16 CPU::indirxAddr() {
     u16 zpAddr = readMemory(pc++);
     tick();
-    u8 lsb = readMemory(zpAddr + x);
-    u8 msb = readMemory(zpAddr + x + 1);
+    u8 lsb = readMemory((zpAddr + x) & 0xFF);
+    u8 msb = readMemory((zpAddr + x + 1) & 0xFF);
     return (u16) ((msb << 8) | lsb);
 }
 
 u16 CPU::indiryAddr(u8 opcode) {
     u16 zpAddr = readMemory(pc++);
     u8 lsb = readMemory(zpAddr);
-    u8 msb = readMemory(zpAddr + 1);
+    u8 msb = readMemory((zpAddr + 1) & 0xFF);
 
     u16 addr = (msb << 8) | lsb;
     u8 page = addr >> 8;

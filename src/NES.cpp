@@ -8,7 +8,7 @@ NES::~NES() {
 }
 
 void NES::start() {
-    gameCart = cart::fromFile("roms/nestest.nes");
+    gameCart = cart::fromFile("roms/dk.nes");
     cpu.gameCart = gameCart;
     ppu.gameCart = gameCart;
     cpu.powerOn();
