@@ -255,6 +255,10 @@ void PPU::tick() {
                     } else if (bgPixel == 0) {
                         renderPixel(sprColour);
                     } else {
+                        if ((dot >= 8 || (sprLeft && bgLeft)) &&
+                            dot < 255) {
+                            s0hit = true;
+                        }
                         if (((oam2[sprInd * 4 + 2] >> 5) & 0x01) == 0) {
                             renderPixel(sprColour);
                         } else {
@@ -438,11 +442,7 @@ void PPU::writeMemory(u16 addr, u8 v) {
 }
 
 void PPU::writeRegister(u16 addr, u8 v) {
-    // OAMDMA
-    if (addr == 0x4014) {
-        return;
-    }
-    addr &= 0x0F;
+    addr &= 0x07;
     switch (addr) {
         case 0x00: // PPUCTRL
             nmiEnabled = v >> 7;
@@ -450,7 +450,7 @@ void PPU::writeRegister(u16 addr, u8 v) {
             bgPatternTable = v >> 4 & 0x01;
             sprPatternTable = v >> 3 & 0x01;
             vramInc = ((v >> 2) & 0x01) * 31 + 1;
-            tempAddr = (v & 0x03) << 10;
+            tempAddr = (tempAddr & 0x73FF) | ((v & 0x03) << 10);
             break;
         case 0x01: // PPUMASK
             grey = v & 0x01;
@@ -496,7 +496,7 @@ void PPU::writeRegister(u16 addr, u8 v) {
 }
 
 u8 PPU::readRegister(u16 addr) {
-    addr &= 0x0F;
+    addr &= 0x07;
     u8 ret = 0x00;
     switch (addr) {
         case 0x02: // PPUSTATUS
