@@ -3,6 +3,7 @@
 
 #include "controller.h"
 #include "PPU.h"
+#include "APU.h"
 #include "cart.h"
 #include "types.h"
 
@@ -22,6 +23,7 @@ private:
     int lastTickCount = 0;
 
     PPU* ppu = nullptr;
+    APU* apu = nullptr;
     controller* ctrl1 = nullptr;
     controller* ctrl2 = nullptr;
 
@@ -82,7 +84,7 @@ private:
 public:
     cart* gameCart = nullptr;
 
-    CPU(PPU* ppu, controller* ctrl1, controller* ctrl2);
+    CPU(PPU* ppu, APU* apu, controller* ctrl1, controller* ctrl2);
     ~CPU();
 
     void powerOn();

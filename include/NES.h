@@ -6,6 +6,7 @@
 #include "controller.h"
 #include "CPU.h"
 #include "PPU.h"
+#include "APU.h"
 #include "cart.h"
 #include "types.h"
 
@@ -13,6 +14,7 @@ class NES {
 private:
     CPU cpu;
     PPU ppu;
+    APU apu;
     cart* gameCart;
 
     controller ctrl1;

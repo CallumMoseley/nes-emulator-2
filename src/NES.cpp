@@ -1,7 +1,10 @@
 #include "NES.h"
 
-NES::NES(SDL_Renderer* renderer) : cpu(&ppu, &ctrl1, &ctrl2), ppu(renderer),
-                                   ctrl1(1), ctrl2(2) {}
+NES::NES(SDL_Renderer* renderer) :
+    cpu(&ppu, &apu, &ctrl1, &ctrl2),
+    ppu(renderer),
+    ctrl1(1),
+    ctrl2(2) {}
 
 NES::~NES() {
     delete gameCart;

@@ -2,12 +2,12 @@
 #include <unistd.h>
 #include "CPU.h"
 
-CPU::CPU(PPU* ppu, controller* ctrl1, controller* ctrl2) {
-    this->ppu = ppu;
-    this->ctrl1 = ctrl1;
-    this->ctrl2 = ctrl2;
-    ram = new u8[0x800];
-}
+CPU::CPU(PPU* ppu, APU* apu, controller* ctrl1, controller* ctrl2) :
+    ppu(ppu),
+    apu(apu), 
+    ctrl1(ctrl1),
+    ctrl2(ctrl2),
+    ram(new u8[0x800]) {}
 
 CPU::~CPU() {
     delete[] ram;
@@ -103,6 +103,7 @@ void CPU::tick() {
     for (int i = 0; i < 3; i++) {
         ppu->tick();
     }
+    apu->tick();
 
     irqActive = false;
 
