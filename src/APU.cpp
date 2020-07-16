@@ -4,19 +4,7 @@
 void audioCallback(void* userdata, u8* stream, int len) {
     APU* apu = (APU*) userdata;
 
-    stream = new u8[len];
     SDL_memset(stream, 0, len);
-
-    u8 data[len] = {0};
-    for (int i = 0; i < len; i++) {
-        if (i % 110 < 55) {
-            data[i] = 128+1;
-        } else {
-            data[i] = 128-1;
-        }
-    }
-    
-    SDL_MixAudioFormat(stream, data, AUDIO_U8, len, apu->getVolume());
 }
 
 APU::APU() : volume{128} {
@@ -34,7 +22,7 @@ APU::APU() : volume{128} {
     if (this->dev == 0) {
         SDL_Log("Failed to open audio: %s", SDL_GetError());
     } else {
-        SDL_PauseAudioDevice(dev, 0);
+        //SDL_PauseAudioDevice(dev, 0);
     }
 }
 

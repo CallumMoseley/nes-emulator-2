@@ -3,11 +3,19 @@
 cart001::cart001(int prgRamSize, int prgBanks, int chrBanks, u8* prg, u8* chr) {
     this->prgBanks = prgBanks;
     this->chrBanks = chrBanks;
-    this->prgRom = new u8[prgBanks * 0x4000];
-    this->chrRom = new u8[chrBanks * 0x2000];
+
+    this->prgRom = nullptr;
+    this->chrRom = nullptr;
     this->prgRam = new u8[prgRamSize];
-    memcpy(this->prgRom, prg, prgBanks * 0x4000);
-    memcpy(this->chrRom, chr, chrBanks * 0x2000);
+
+    if (prgBanks > 0) {
+        this->prgRom = new u8[prgBanks * 0x4000];
+        memcpy(this->prgRom, prg, prgBanks * 0x4000);
+    }
+    if (chrBanks > 0) {
+        this->chrRom = new u8[chrBanks * 0x2000];
+        memcpy(this->chrRom, chr, chrBanks * 0x2000);
+    }
 
     mirroring = 0;
 

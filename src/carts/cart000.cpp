@@ -3,10 +3,17 @@
 cart000::cart000(int prgBanks, int chrBanks, u8* prg, u8* chr, bool v) {
     this->prgBanks = prgBanks;
     this->chrBanks = chrBanks;
-    this->prg = new u8[prgBanks * 0x4000];
-    this->chr = new u8[chrBanks * 0x2000];
-    memcpy(this->prg, prg, prgBanks * 0x4000);
-    memcpy(this->chr, chr, chrBanks * 0x2000);
+
+    this->prg = nullptr;
+    this->chr = nullptr;
+    if (prgBanks > 0) {
+        this->prg = new u8[prgBanks * 0x4000];
+        memcpy(this->prg, prg, prgBanks * 0x4000);
+    }
+    if (chrBanks > 0) {
+        this->chr = new u8[chrBanks * 0x2000];
+        memcpy(this->chr, chr, chrBanks * 0x2000);
+    }
 
     vMirror = v;
 }
@@ -35,11 +42,11 @@ void cart000::writeMemoryCPU(u16 addr, u8 v) {
 }
 
 u8 cart000::readMemoryPPU(u16 addr) {
-    if (addr >= 0x2000) return 0x00;
+    if (addr >= 0x2000 || chrBanks == 0) return 0x00;
     return chr[addr];
 }
 
 void cart000::writeMemoryPPU(u16 addr, u8 v) {
-    if (addr >= 0x2000) return;
+    if (addr >= 0x2000 || chrBanks == 0) return;
     chr[addr] = v;
 }

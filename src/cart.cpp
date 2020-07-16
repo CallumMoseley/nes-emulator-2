@@ -33,6 +33,9 @@ cart* cart::fromFile(char filename[]) {
     if ((header[9] & 0xF0) == 0xF0) {
         chrRomSize = (1 << (header[5] >> 2)) * ((header[5] & 0x03) * 2 + 1);
     }
+    if (chrRomSize == 0) {
+        chrRomSize = 1;
+    }
 
     int prgRamSize = 64 << (header[10] & 0x0F);
     int prgNvramSize = 64 << (header[10] & 0xF0 >> 4);
@@ -41,16 +44,23 @@ cart* cart::fromFile(char filename[]) {
     int chrNvramSize = 64 << (header[11] & 0xF0 >> 4);
 
     if ((header[12] & 0x03) != 0) {
-        printf("Warning: This emulator only supportsr NTSC");
+        printf("Warning: This emulator only supports NTSC");
+    }
+
+    u8* prgRom = nullptr;
+    u8* chrRom = nullptr;
+
+    if (prgRomSize > 0) {
+        prgRom = new u8[prgRomSize * 0x4000];
+        file.read((char*) (prgRom), prgRomSize * 0x4000);
+    }
+
+    if (chrRomSize > 0) {
+        chrRom = new u8[chrRomSize * 0x2000];
+        file.read((char*) (chrRom), chrRomSize * 0x2000);
     }
 
     if (mapper == 0) {
-        u8* prgRom = new u8[prgRomSize * 0x4000];
-        u8* chrRom = new u8[chrRomSize * 0x2000];
-
-        file.read((char*) (prgRom), prgRomSize * 0x4000);
-        file.read((char*) (chrRom), chrRomSize * 0x2000);
-
         cart* game = new cart000(prgRomSize,
                                  chrRomSize,
                                  prgRom,
@@ -58,14 +68,9 @@ cart* cart::fromFile(char filename[]) {
                                  header[6] & 0x01);
         delete[] prgRom;
         delete[] chrRom;
+        delete[] header;
         return game;
     } else if (mapper == 1) {
-        u8* prgRom = new u8[prgRomSize * 0x4000];
-        u8* chrRom = new u8[chrRomSize * 0x2000];
-
-        file.read((char*) (prgRom), prgRomSize * 0x4000);
-        file.read((char*) (chrRom), chrRomSize * 0x2000);
-
         cart* game = new cart001(prgRamSize,
                                  prgRomSize,
                                  chrRomSize,
@@ -73,10 +78,12 @@ cart* cart::fromFile(char filename[]) {
                                  chrRom);
         delete[] prgRom;
         delete[] chrRom;
+        delete[] header;
         return game;       
     } else {
         printf("Mapper %d is not supported yet\n", mapper);
     }
 
+    delete[] header;
     return nullptr;
 }

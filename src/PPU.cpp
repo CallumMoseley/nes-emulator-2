@@ -2,6 +2,7 @@
 #include "constants.h"
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 PPU::PPU(SDL_Renderer* renderer) {
     this->renderer = renderer;
@@ -205,11 +206,106 @@ void PPU::loadTile() {
     }
 }
 
+void PPU::renderFrame() {
+    SDL_LockTexture(texture, nullptr, (void**) &pixels, &pitch);
+
+    if (!sprEn && !bgEn) {
+        memset(pixels, 0, 256 * 240);
+    }
+
+    if (bgEn) {
+        // Render background
+        for (u8 y = 0; y < 30; y++) {
+            for (u8 x = 0; x < 32; x++) {
+                u8 ntByte = readMemory(0x2000 + y * 32 + x);
+                u8 attrByte = readMemory(0x23C0 + (y << 1 & 0xF8) + (x >> 2));
+                u8 attrQuad = (y & 0x02) | ((x & 0x02) >> 1);
+                u8 attrVal = attrByte >> (attrQuad * 2) & 0x03;
+
+                renderPattern(x * 8, y * 8, false, ntByte, attrVal, false, false);
+            }
+        }
+    }
+
+    if (sprEn) {
+        // Render sprites
+        for (u8 spr = 0; spr < 64; spr++) {
+            u8 y = oam[spr << 2];
+            
+            // Check if it would be off the bottom
+            if (y >= 0xEF) {
+                continue;
+            }
+
+            y++;
+
+            u8 index = oam[(spr << 2) + 1];
+            u8 attrs = oam[(spr << 2) + 2];
+            u8 x = oam[(spr << 2) + 3];
+
+            renderPattern(x, y, true, index, attrs & 0x03, attrs >> 6 & 0x01, attrs >> 7);
+        }
+    }
+
+    SDL_UnlockTexture(texture);
+    SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+    SDL_RenderPresent(renderer);
+
+    s0hit = false;
+
+    nmiOccurred = true;
+}
+
+void PPU::renderPattern(u8 x, u8 y, bool isSpr, u8 index, u8 attrVal, bool flipH, bool flipV) {
+    u8 table = isSpr ? sprPatternTable : bgPatternTable;
+
+    if (!isSpr || !tallSprites) {
+        for (u8 fineY = 0; fineY < 8; fineY++) {
+            u8 yIndex = flipV ? 7 - fineY : fineY;
+            u16 patternAddr = (table << 12) | (index << 4) | yIndex;
+            u8 lower = readMemory(patternAddr);
+            u8 upper = readMemory(patternAddr | 0x0008);
+
+            for (u8 fineX = 0; fineX < 8; fineX++) {
+                u8 xIndex = flipH ? fineX : 7 - fineX;
+                u8 pattern = (((upper >> xIndex) & 0x01) << 1) | ((lower >> xIndex) & 0x01);
+
+                if (!isSpr || pattern != 0) {
+                    u8 colour = readMemory(0x3F00 | (isSpr << 4) | (attrVal << 2) | pattern);
+                    pixels[(y + fineY) * 256 + x + fineX] = colours[colour];
+                }
+            }
+        }
+    } else {
+        for (u8 fineY = 0; fineY < 16; fineY++) {
+            u8 yIndex = flipV ? 15 - fineY : fineY;
+            u16 patternAddr = ((index & 0x01) << 12) | ((index & 0xFE) << 4) | yIndex;
+            u8 lower = readMemory(patternAddr);
+            u8 upper = readMemory(patternAddr | 0x0008);
+
+            for (u8 fineX = 0; fineX < 8; fineX++) {
+                u8 xIndex = flipH ? fineX : 7 - fineX;
+                u8 pattern = (((upper >> xIndex) & 0x01) << 1) | ((lower >> xIndex) & 0x01);
+
+                if (pattern != 0) {
+                    u8 colour = readMemory(0x3F00 | (isSpr << 4) | (attrVal << 2) | pattern);
+                    pixels[(y + fineY) * 256 + x + fineX] = colours[colour];
+                }
+            }
+        }
+    }
+}
+
+u8 PPU::getS0hit() {
+    return 0;
+}
+
 void PPU::tick() {
+    /*
     // Visible scanlines
     if (scanline >= 0 && scanline < 240) {
         if (dot == 0) {
-            SDL_LockTexture(texture, nullptr, (void**) &pixels, &pitch);
+            //SDL_LockTexture(texture, nullptr, (void**) &pixels, &pitch);
         }
         if (bgEn || sprEn) {
             if (scanline == 0 && dot == 0 && frameCount % 2 == 1) dot++;
@@ -288,12 +384,13 @@ void PPU::tick() {
         }
     } else if (scanline == 240) {
         if ((bgEn || sprEn) && dot == 0) {
-            SDL_UnlockTexture(texture);
-            SDL_RenderCopy(renderer, texture, nullptr, nullptr);
-            SDL_RenderPresent(renderer);
+            //SDL_UnlockTexture(texture);
+            //SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+            //SDL_RenderPresent(renderer);
         }
     } else if (scanline == 241) {
         if (dot == 1) {
+            renderFrame();
             nmiOccurred = true;
         }
     } else if (scanline == 261) {
@@ -321,10 +418,14 @@ void PPU::tick() {
             frameCount++;
         }
     }
+    */
 
     dot++;
     if (dot == 341) {
         scanline++;
+        if (scanline == 240) {
+            renderFrame();
+        }
     }
     dot %= 341;
     scanline %= 262;
@@ -358,7 +459,7 @@ void PPU::updateOam2() {
                 u8 tile = oam2[i * 4 + 1];
                 u8 info = oam2[i * 4 + 2];
                 u8 table = sprPatternTable;
-                if (largeSprites) {
+                if (tallSprites) {
                     table = tile & 0x01; 
                     tile &= 0xFE;
                     if (scanline - y >= 8) {
@@ -446,11 +547,11 @@ void PPU::writeRegister(u16 addr, u8 v) {
     switch (addr) {
         case 0x00: // PPUCTRL
             nmiEnabled = v >> 7;
-            largeSprites = v >> 5 & 0x01;
+            tallSprites = v >> 5 & 0x01;
             bgPatternTable = v >> 4 & 0x01;
             sprPatternTable = v >> 3 & 0x01;
             vramInc = ((v >> 2) & 0x01) * 31 + 1;
-            tempAddr = (tempAddr & 0x73FF) | ((v & 0x03) << 10);
+            tempAddr = 0x2000 | ((v & 0x03) << 10);
             break;
         case 0x01: // PPUMASK
             grey = v & 0x01;
@@ -500,7 +601,7 @@ u8 PPU::readRegister(u16 addr) {
     u8 ret = 0x00;
     switch (addr) {
         case 0x02: // PPUSTATUS
-            ret = (nmiOccurred << 7) | (s0hit << 6) | (sprOverflow << 5);
+            ret = (nmiOccurred << 7) | (getS0hit() << 6) | (sprOverflow << 5);
             nmiOccurred = false;
             w = false;
             return ret;

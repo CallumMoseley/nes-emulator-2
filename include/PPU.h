@@ -13,8 +13,9 @@ private:
     SDL_Texture* texture = nullptr;
 
     uint32_t* pixels = nullptr;
-    int pitch = 0;
+    int pitch = 256;
 
+    int s0hitCycle = 0;
     bool s0hit = false;
     bool sprOverflow = false;
 
@@ -25,7 +26,7 @@ private:
 
     bool nmiEnabled = false;
     bool nmiOccurred = false;
-    bool largeSprites = false;
+    bool tallSprites = false;
 
     bool boostR = false, boostG = false, boostB = false;
 
@@ -71,6 +72,11 @@ private:
     void incAddrY(u16 &addr);
     void shiftRegisters();
     void loadTile();
+
+    void renderFrame();
+    void renderPattern(u8, u8, bool, u8, u8, bool, bool);
+
+    u8 getS0hit();
 
     void renderPixel(u8 colour);
     void initializeMemory();

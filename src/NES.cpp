@@ -11,6 +11,7 @@ NES::~NES() {
 }
 
 void NES::start() {
+    //gameCart = cart::fromFile("roms/test_roms/branch_timing_tests/1.Branch_Basics.nes");
     gameCart = cart::fromFile("roms/smb.nes");
     cpu.gameCart = gameCart;
     ppu.gameCart = gameCart;
